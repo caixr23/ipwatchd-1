@@ -8,7 +8,7 @@ Homepage: http://ipwatchd.sf.net
 
 Package: ipwatchd
 Architecture: linux-any
-Depends: ${shlibs:Depends}, ${misc:Depends}
+Depends: ${shlibs:Depends}, ${misc:Depends}, lsb-base
 Suggests: ipwatchd-gnotify
 Description: IP conflict detection tool
  IPwatchD is a simple daemon that analyses all incoming ARP packets in order
