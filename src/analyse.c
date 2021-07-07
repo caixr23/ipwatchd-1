@@ -27,6 +27,7 @@
 extern IPWD_S_DEVS devices;
 extern IPWD_S_CONFIG config;
 extern int testing_flag;
+extern IPWD_S_CHECK_CONTEXT check_context;
 
 
 //! Callback for "pcap_loop" with standard parameters. Called when ARP packet is received (detection of conflict is done here).
@@ -138,6 +139,16 @@ void ipwd_analyse (u_char * args, const struct pcap_pkthdr *header, const u_char
 		}
 	}
 
+    /* Check ip conflict */
+    if (check_context.stage > 2) {
+      if (strcasecmp (rcv_sip, check_context.ip) == 0 && strcasecmp (rcv_smac, check_context.dev.mac) != 0) {
+        ipwd_message (IPWD_MSG_TYPE_DEBUG, "IP conflict with: %s %s-%s",
+          check_context.ip, check_context.dev.mac, rcv_smac);
+        ipwd_send_signal(check_context.ip, "", rcv_smac);
+        check_context.stage = -1;
+      }
+    }
+
 	/* Search through devices structure */
 	for (i = 0; i < devices.devnum; i++)
 	{
@@ -167,7 +178,8 @@ void ipwd_analyse (u_char * args, const struct pcap_pkthdr *header, const u_char
 		/* Check if current time is within the defend interval */
 		if (difference < config.defend_interval)
 		{
-			ipwd_message (IPWD_MSG_TYPE_ALERT, "MAC address %s causes IP conflict with address %s set on interface %s - no action taken because this happened within the defend interval", rcv_smac, devices.dev[i].ip, devices.dev[i].device);
+			ipwd_message (IPWD_MSG_TYPE_INFO, "MAC address %s causes IP conflict with address %s set on interface %s - no action taken because this happened within the defend interval", rcv_smac, devices.dev[i].ip, devices.dev[i].device);
+            ipwd_send_signal(devices.dev[i].ip, devices.dev[i].mac, rcv_smac);
 			break;
 		}
 
@@ -227,4 +239,3 @@ void ipwd_analyse (u_char * args, const struct pcap_pkthdr *header, const u_char
 
 	}
 }
-

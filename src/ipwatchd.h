@@ -42,6 +42,7 @@
 #include <pcap.h>
 #include <time.h>
 #include <stdarg.h>
+#include <dbus/dbus.h>
 
 
 //! String with IPwatchD version information
@@ -86,7 +87,7 @@ IPWD_MSG_TYPE;
 
 //! Protection modes
 typedef enum
-{ 
+{
 	IPWD_PROTECTION_MODE_ACTIVE = 1,		/**< Indicates active protection mode */
 	IPWD_PROTECTION_MODE_PASSIVE = 2,		/**< Indicates passive protection mode */
 }
@@ -94,7 +95,7 @@ IPWD_PROTECTION_MODE;
 
 //! Configuration modes
 typedef enum
-{ 
+{
 	IPWD_CONFIGURATION_MODE_AUTOMATIC = 1,	/**< Indicates automatic configuration mode */
 	IPWD_CONFIGURATION_MODE_MANUAL = 2		/**< Indicates manual configuration mode */
 }
@@ -170,6 +171,16 @@ typedef struct
 }
 IPWD_S_ARP_HEADER;
 
+//! Structure useful for ip conflict check
+typedef struct
+{
+  int stage;
+  const char* ip;
+  const char* misc;
+  IPWD_S_DEV dev;
+  DBusMessage* msg;
+}
+IPWD_S_CHECK_CONTEXT;
 
 /* IPwatchD internal functions - described in corresponding source files */
 
@@ -196,6 +207,8 @@ int ipwd_genarp (const char *dev, const char *p_sip, const char *p_smac, const c
 
 /* ipwatchd.c */
 void ipwd_print_help (void);
+void ipwd_check_context_verify (void);
+void ipwd_check_context_update (void);
 
 /* message.c */
 void ipwd_message (IPWD_MSG_TYPE type, const char *format, ...);
@@ -204,5 +217,7 @@ void ipwd_message (IPWD_MSG_TYPE type, const char *format, ...);
 int ipwd_set_signal_handler (void);
 void ipwd_signal_handler (int signal);
 
-// \endcond - Doxygen ignore block end
+/* dbus.c */
+void ipwd_send_signal (const char *ip, const char *smac, const char *dmac);
 
+// \endcond - Doxygen ignore block end

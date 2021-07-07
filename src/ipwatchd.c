@@ -41,6 +41,11 @@ IPWD_S_CONFIG config;
 //! Handle for libpcap
 pcap_t *h_pcap = NULL;
 
+//! Flag indicating loop over
+volatile int exit_flag =  0;
+
+//! Structure that holds ip conflict check context
+IPWD_S_CHECK_CONTEXT check_context;
 
 //! Main function of the ipwatchd program
 /*!
@@ -202,6 +207,12 @@ int main (int argc, char *argv[])
 		return (IPWD_RV_ERROR);
 	}
 
+    if (pcap_setnonblock(h_pcap, 1, errbuf) == -1)
+    {
+      ipwd_message (IPWD_MSG_TYPE_ERROR, "Unable to set non block - %s", errbuf);
+      return (IPWD_RV_ERROR);
+    }
+
 	/* Set SIGTERM handler */
 	if (ipwd_set_signal_handler () != IPWD_RV_SUCCESS)
 	{
@@ -227,8 +238,76 @@ int main (int argc, char *argv[])
 
 	ipwd_message (IPWD_MSG_TYPE_DEBUG, "Entering pcap loop");
 
-	/* Loop until SIGTERM calls pcap_breakloop */
-	pcap_loop (h_pcap, -1, ipwd_analyse, NULL);
+    /* Loop until SIGTERM calls pcap_breakloop */
+    /* pcap_loop(h_pcap, -1, ipwd_analyse, NULL); */
+
+   DBusMessage* msg;
+   DBusMessageIter args;
+   DBusConnection* conn;
+   DBusError err;
+
+   check_context.stage = 0;
+
+   // initialise the errors
+   dbus_error_init(&err);
+
+   // connect to the bus and check for errors
+   conn = dbus_bus_get(DBUS_BUS_SYSTEM, &err);
+   if (dbus_error_is_set(&err)) {
+     ipwd_message(IPWD_MSG_TYPE_ERROR, "Connection Error (%s)", err.message);
+     dbus_error_free(&err);
+   }
+   if (NULL == conn) {
+     return (IPWD_RV_ERROR);
+   }
+
+   // add a rule for which messages we want to see
+   dbus_bus_add_match(conn, "type='signal',interface='com.deepin.system.IPWatchD'", &err); // see signals from the given interface
+   dbus_connection_flush(conn);
+   if (dbus_error_is_set(&err)) {
+      ipwd_message(IPWD_MSG_TYPE_ERROR, "Match Error (%s)", err.message);
+      return (IPWD_RV_ERROR);
+   }
+
+    while (!exit_flag) {
+      // non blocking read of the next available message
+      dbus_connection_read_write(conn, 0);
+      msg = dbus_connection_pop_message(conn);
+
+      if (msg != NULL) {
+        // check if the message is a signal from the correct interface and with the correct name
+        if (dbus_message_is_signal(msg, "com.deepin.system.IPWatchD", "IPConflictCheck") && check_context.stage == 0) {
+          // read the parameters
+          if (!dbus_message_iter_init(msg, &args)) {
+            ipwd_message(IPWD_MSG_TYPE_ERROR, "Message Has No Parameters\n");
+          } else if (DBUS_TYPE_STRING != dbus_message_iter_get_arg_type(&args)) {
+            ipwd_message(IPWD_MSG_TYPE_ERROR, "Argument is not string!");
+          } else {
+            check_context.stage++;
+            dbus_message_iter_get_basic(&args, &check_context.ip);
+          }
+          if (!dbus_message_iter_has_next(&args) || !dbus_message_iter_next(&args)) {
+            ipwd_message(IPWD_MSG_TYPE_ERROR, "Argument is not enough!");
+          } else if (DBUS_TYPE_STRING != dbus_message_iter_get_arg_type(&args)) {
+            ipwd_message(IPWD_MSG_TYPE_ERROR, "Argument is not string!");
+          } else {
+            check_context.stage++;
+            dbus_message_iter_get_basic(&args, &check_context.misc);
+          }
+
+          check_context.msg = msg;
+          ipwd_check_context_verify();
+        } else {
+          dbus_message_unref(msg);
+        }
+      }
+
+      ipwd_check_context_update();
+
+      if (pcap_dispatch (h_pcap, -1, ipwd_analyse, NULL) == 0) {
+        usleep(10000);
+      }
+    }
 
 	pcap_close (h_pcap);
 
@@ -275,3 +354,92 @@ void ipwd_print_help (void)
 	fprintf (stdout, "Please send any bug reports to jariq@jariq.sk\n");
 }
 
+void ipwd_check_context_verify (void)
+{
+  if (check_context.ip == NULL || check_context.misc == NULL) {
+    ipwd_message (IPWD_MSG_TYPE_ERROR, "Unable to convert source IP address %s", check_context.ip);
+    check_context.stage = -1;
+    return;
+  }
+
+  struct in_addr sip, dip;
+  if (inet_aton(check_context.ip, &sip) == 0) {
+    ipwd_message (IPWD_MSG_TYPE_ERROR, "Unable to convert source IP address %s", check_context.ip);
+    check_context.stage = -1;
+    return;
+  }
+
+  int i;
+  memset(&check_context.dev, 0, sizeof(IPWD_S_DEV));
+  check_context.dev.state = IPWD_DEVICE_STATE_UNUSABLE;
+
+  if (check_context.misc[0] == '\0') {
+    IPWD_S_DEV dev;
+    for (i = 0; i < devices.devnum; i++) {
+      memset(dev.device, 0, sizeof(dev.device));
+      strcpy(dev.device, devices.dev[i].device);
+      if (ipwd_devinfo (dev.device, dev.ip, dev.mac) == IPWD_RV_ERROR) {
+        continue;
+      }
+      if (inet_aton(dev.ip, &dip) != 0) {
+        uint8_t *p = (uint8_t*)&sip.s_addr;
+        uint8_t *q = (uint8_t*)&dip.s_addr;
+
+        if (p[0] == q[0] && p[1] == q[1] && p[2] == q[2]) {
+          memcpy(&check_context.dev, &dev, sizeof(IPWD_S_DEV));
+          check_context.dev.state = IPWD_DEVICE_STATE_USABLE;
+          break;
+        }
+      }
+
+      memcpy(&check_context.dev, &dev, sizeof(IPWD_S_DEV));
+      check_context.dev.state = IPWD_DEVICE_STATE_USABLE;
+    }
+  } else {
+    strncpy(check_context.dev.device, check_context.misc, IPWD_MAX_DEVICE_NAME_LEN - 1);
+    for (i = 0; i < devices.devnum; i++) {
+      if (strcasecmp (check_context.dev.device, devices.dev[i].device) == 0) {
+        if (ipwd_devinfo (check_context.dev.device, check_context.dev.ip, check_context.dev.mac) != IPWD_RV_ERROR) {
+          check_context.dev.state = IPWD_DEVICE_STATE_USABLE;
+        }
+        break;
+      }
+    }
+  }
+
+  if (check_context.dev.state == IPWD_DEVICE_STATE_UNUSABLE) {
+      ipwd_message(IPWD_MSG_TYPE_ALERT, "can't find dev: %s", check_context.misc);
+      check_context.stage = -1;
+  }
+}
+
+void ipwd_check_context_update (void)
+{
+    switch (check_context.stage) {
+      case 0:
+        break;
+      case 2:
+      case 3:
+      case 4:
+        // send arp packet
+        ipwd_genarp(check_context.dev.device, "0.0.0.0", check_context.dev.mac, check_context.ip, "ff:ff:ff:ff:ff:ff", ARPOP_REQUEST);
+        usleep(10000);
+        check_context.stage++;
+        break;
+      case 5:
+      case 6:
+      case 7:
+        // send garp packet
+        ipwd_genarp(check_context.dev.device, check_context.ip, check_context.dev.mac, check_context.ip, "ff:ff:ff:ff:ff:ff", ARPOP_REQUEST);
+        usleep(10000);
+        check_context.stage++;
+        break;
+      case 8:
+        // send ok
+        ipwd_send_signal(check_context.ip, "", "");
+      default:
+        check_context.stage = 0;
+        if (check_context.msg != NULL)
+          dbus_message_unref(check_context.msg);
+      }
+}

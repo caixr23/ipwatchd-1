@@ -3,11 +3,12 @@
 
 CC= gcc
 CFLAGS= -g -Wall -O2
-LIBS= -lpcap -lnet
+LIBS= -lpcap -lnet -ldbus-1
+CFLAGS += -I/usr/include/dbus-1.0 -I/usr/lib/x86_64-linux-gnu/dbus-1.0/include
 
-all: analyse.o config.o daemonize.o devinfo.o genarp.o ipwatchd.o message.o signal.o
+all: analyse.o config.o daemonize.o devinfo.o genarp.o ipwatchd.o message.o signal.o dbus.o
 	$(CC) $(CFLAGS) analyse.o config.o daemonize.o devinfo.o genarp.o \
-	ipwatchd.o message.o signal.o -o ipwatchd $(LIBS)
+	ipwatchd.o message.o signal.o dbus.o -o ipwatchd $(LIBS)
 
 
 analyse.o: analyse.c ipwatchd.h
@@ -34,6 +35,8 @@ message.o: message.c ipwatchd.h
 signal.o: signal.c ipwatchd.h
 	$(CC) $(CFLAGS) -c signal.c -o signal.o
 
+dbus.o: dbus.c ipwatchd.h
+	$(CC) $(CFLAGS) -c dbus.c -o dbus.o
 
 clean:
 	-rm *.o
@@ -64,4 +67,3 @@ uninstall:
 	rm $(DESTDIR)/usr/share/man/man8/ipwatchd.8.gz
 	rm $(DESTDIR)/usr/share/man/man5/ipwatchd.conf.5.gz
 	rm $(DESTDIR)/usr/share/man/man1/ipwatchd-script.1.gz
-
