@@ -4,7 +4,7 @@
 CC= gcc
 CFLAGS= -g -Wall -O2
 LIBS= -lpcap -lnet -ldbus-1
-CFLAGS += -I/usr/include/dbus-1.0 -I/usr/lib/x86_64-linux-gnu/dbus-1.0/include
+CFLAGS += `pkg-config --cflags dbus-1`
 
 all: analyse.o config.o daemonize.o devinfo.o genarp.o ipwatchd.o message.o signal.o dbus.o
 	$(CC) $(CFLAGS) analyse.o config.o daemonize.o devinfo.o genarp.o \
