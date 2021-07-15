@@ -305,7 +305,7 @@ int main (int argc, char *argv[])
       ipwd_check_context_update();
 
       if (pcap_dispatch (h_pcap, -1, ipwd_analyse, NULL) == 0) {
-        usleep(10000);
+        usleep(check_context.stage > 2 ? 10000 : 100000);
       }
     }
 
