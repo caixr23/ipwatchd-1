@@ -217,7 +217,7 @@ int ipwd_fill_devices (void)
 
 		memset (devices.dev[devices.devnum].device, '\0', IPWD_MAX_DEVICE_NAME_LEN);
 		strncpy (devices.dev[devices.devnum].device, iface->ifr_name, IPWD_MAX_DEVICE_NAME_LEN - 1);
-		devices.dev[devices.devnum].mode = IPWD_PROTECTION_MODE_PASSIVE;
+        devices.dev[devices.devnum].mode = IPWD_PROTECTION_MODE_ACTIVE;
 
 		/* Set time of last conflict */
 		devices.dev[devices.devnum].time.tv_sec = 0;
@@ -235,4 +235,3 @@ int ipwd_fill_devices (void)
 	return (IPWD_RV_SUCCESS);
 
 }
-
