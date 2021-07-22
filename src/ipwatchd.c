@@ -245,6 +245,7 @@ int main (int argc, char *argv[])
    DBusMessageIter args;
    DBusConnection* conn;
    DBusError err;
+   int ret;
 
    check_context.stage = 0;
 
@@ -260,54 +261,60 @@ int main (int argc, char *argv[])
    if (NULL == conn) {
      return (IPWD_RV_ERROR);
    }
+   check_context.conn = conn;
 
-   // add a rule for which messages we want to see
-   dbus_bus_add_match(conn, "type='signal',interface='com.deepin.system.IPWatchD'", &err); // see signals from the given interface
-   dbus_connection_flush(conn);
+   // request our name on the bus and check for errors
+   ret = dbus_bus_request_name(conn, "com.deepin.system.IPWatchD", DBUS_NAME_FLAG_REPLACE_EXISTING , &err);
    if (dbus_error_is_set(&err)) {
-      ipwd_message(IPWD_MSG_TYPE_ERROR, "Match Error (%s)", err.message);
+      ipwd_message(IPWD_MSG_TYPE_ERROR, "Name Error (%s)\n", err.message);
+      dbus_error_free(&err);
+   }
+   if (DBUS_REQUEST_NAME_REPLY_PRIMARY_OWNER != ret) {
+      fprintf(stderr, "Not Primary Owner (%d)\n", ret);
       return (IPWD_RV_ERROR);
    }
 
-    while (!exit_flag) {
-      // non blocking read of the next available message
-      dbus_connection_read_write(conn, 0);
-      msg = dbus_connection_pop_message(conn);
+   while (!exit_flag) {
+     // non blocking read of the next available message
+     dbus_connection_read_write(conn, 0);
+     msg = dbus_connection_pop_message(conn);
 
-      if (msg != NULL) {
-        // check if the message is a signal from the correct interface and with the correct name
-        if (dbus_message_is_signal(msg, "com.deepin.system.IPWatchD", "IPConflictCheck") && check_context.stage == 0) {
-          // read the parameters
-          if (!dbus_message_iter_init(msg, &args)) {
-            ipwd_message(IPWD_MSG_TYPE_ERROR, "Message Has No Parameters\n");
-          } else if (DBUS_TYPE_STRING != dbus_message_iter_get_arg_type(&args)) {
-            ipwd_message(IPWD_MSG_TYPE_ERROR, "Argument is not string!");
-          } else {
-            check_context.stage++;
-            dbus_message_iter_get_basic(&args, &check_context.ip);
-          }
-          if (!dbus_message_iter_has_next(&args) || !dbus_message_iter_next(&args)) {
-            ipwd_message(IPWD_MSG_TYPE_ERROR, "Argument is not enough!");
-          } else if (DBUS_TYPE_STRING != dbus_message_iter_get_arg_type(&args)) {
-            ipwd_message(IPWD_MSG_TYPE_ERROR, "Argument is not string!");
-          } else {
-            check_context.stage++;
-            dbus_message_iter_get_basic(&args, &check_context.misc);
-          }
+     if (msg != NULL) {
+       // check this is a method call for the right interface & method
+       if (dbus_message_is_method_call(msg, "com.deepin.system.IPWatchD", "RequestIPConflictCheck") &&
+         dbus_message_has_path(msg, "/com/deepin/system/IPWatchD") &&
+         check_context.stage == 0) {
+         // read the parameters
+         if (!dbus_message_iter_init(msg, &args)) {
+           ipwd_message(IPWD_MSG_TYPE_ERROR, "Message Has No Parameters\n");
+         } else if (DBUS_TYPE_STRING != dbus_message_iter_get_arg_type(&args)) {
+           ipwd_message(IPWD_MSG_TYPE_ERROR, "Argument is not string!");
+         } else {
+           check_context.stage++;
+           dbus_message_iter_get_basic(&args, &check_context.ip);
+         }
+         if (!dbus_message_iter_has_next(&args) || !dbus_message_iter_next(&args)) {
+           ipwd_message(IPWD_MSG_TYPE_ERROR, "Argument is not enough!");
+         } else if (DBUS_TYPE_STRING != dbus_message_iter_get_arg_type(&args)) {
+           ipwd_message(IPWD_MSG_TYPE_ERROR, "Argument is not string!");
+         } else {
+           check_context.stage++;
+           dbus_message_iter_get_basic(&args, &check_context.misc);
+         }
 
-          check_context.msg = msg;
-          ipwd_check_context_verify();
-        } else {
-          dbus_message_unref(msg);
-        }
-      }
+         check_context.msg = msg;
+         ipwd_check_context_verify();
+       } else {
+         dbus_message_unref(msg);
+       }
+     }
 
-      ipwd_check_context_update();
+     ipwd_check_context_update();
 
-      if (pcap_dispatch (h_pcap, -1, ipwd_analyse, NULL) == 0) {
-        usleep(check_context.stage > 2 ? 10000 : 100000);
-      }
-    }
+     if (pcap_dispatch (h_pcap, -1, ipwd_analyse, NULL) == 0) {
+       usleep(check_context.stage > 2 ? 10000 : 100000);
+     }
+   }
 
 	pcap_close (h_pcap);
 
@@ -435,8 +442,8 @@ void ipwd_check_context_update (void)
         check_context.stage++;
         break;
       case 8:
-        // send ok
-        ipwd_send_signal(check_context.ip, "", "");
+        // reply ok
+        ipwd_reply_to_method(check_context.msg, check_context.conn, "");
       default:
         check_context.stage = 0;
         if (check_context.msg != NULL)

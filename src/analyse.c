@@ -144,7 +144,7 @@ void ipwd_analyse (u_char * args, const struct pcap_pkthdr *header, const u_char
       if (strcasecmp (rcv_sip, check_context.ip) == 0 && strcasecmp (rcv_smac, check_context.dev.mac) != 0) {
         ipwd_message (IPWD_MSG_TYPE_DEBUG, "IP conflict with: %s %s-%s",
           check_context.ip, check_context.dev.mac, rcv_smac);
-        ipwd_send_signal(check_context.ip, "", rcv_smac);
+        ipwd_reply_to_method(check_context.msg, check_context.conn, rcv_smac);
         check_context.stage = -1;
       }
     }
@@ -202,7 +202,7 @@ void ipwd_analyse (u_char * args, const struct pcap_pkthdr *header, const u_char
 			ipwd_message (IPWD_MSG_TYPE_ALERT, "MAC address %s causes IP conflict with address %s set on interface %s - passive mode - reply not sent", rcv_smac, devices.dev[i].ip, devices.dev[i].device);
 		}
 
-        ipwd_send_signal(devices.dev[i].ip, devices.dev[i].mac, rcv_smac);
+        ipwd_send_signal(check_context.conn, devices.dev[i].ip, devices.dev[i].mac, rcv_smac);
 
 		if (config.script != NULL)
 		{

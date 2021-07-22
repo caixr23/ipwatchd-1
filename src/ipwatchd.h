@@ -179,6 +179,7 @@ typedef struct
   const char* misc;
   IPWD_S_DEV dev;
   DBusMessage* msg;
+  DBusConnection* conn;
 }
 IPWD_S_CHECK_CONTEXT;
 
@@ -218,6 +219,8 @@ int ipwd_set_signal_handler (void);
 void ipwd_signal_handler (int signal);
 
 /* dbus.c */
-void ipwd_send_signal (const char *ip, const char *smac, const char *dmac);
+void ipwd_send_signal (DBusConnection *conn, const char *ip, const char *smac, const char *dmac);
+void ipwd_reply_to_introspect (DBusMessage *msg, DBusConnection *conn);
+void ipwd_reply_to_method (DBusMessage *msg, DBusConnection *conn, const char *mac);
 
 // \endcond - Doxygen ignore block end

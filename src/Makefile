@@ -51,13 +51,17 @@ install:
 	mkdir -p $(DESTDIR)/usr/share/man/man8
 	mkdir -p $(DESTDIR)/usr/share/man/man5
 	mkdir -p $(DESTDIR)/usr/share/man/man1
+	mkdir -p ${DESTDIR}/usr/share/dbus-1/system.d
 	cp ipwatchd $(DESTDIR)/usr/sbin
 	cp scripts/ipwatchd-script $(DESTDIR)/usr/sbin
 	cp scripts/ipwatchd $(DESTDIR)/etc/init.d
 	cp ipwatchd.conf $(DESTDIR)/etc
+	cp misc/conf/*.conf ${DESTDIR}/usr/share/dbus-1/system.d/
 	cp ../doc/ipwatchd.8.gz $(DESTDIR)/usr/share/man/man8
 	cp ../doc/ipwatchd.conf.5.gz $(DESTDIR)/usr/share/man/man5
 	cp ../doc/ipwatchd-script.1.gz $(DESTDIR)/usr/share/man/man1
+
+
 
 uninstall:
 	rm $(DESTDIR)/usr/sbin/ipwatchd
