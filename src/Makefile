@@ -57,6 +57,7 @@ install:
 	cp scripts/ipwatchd $(DESTDIR)/etc/init.d
 	cp ipwatchd.conf $(DESTDIR)/etc
 	cp misc/conf/*.conf ${DESTDIR}/usr/share/dbus-1/system.d/
+	cp -r misc/system-services ${DESTDIR}/usr/share/dbus-1/
 	cp ../doc/ipwatchd.8.gz $(DESTDIR)/usr/share/man/man8
 	cp ../doc/ipwatchd.conf.5.gz $(DESTDIR)/usr/share/man/man5
 	cp ../doc/ipwatchd-script.1.gz $(DESTDIR)/usr/share/man/man1
