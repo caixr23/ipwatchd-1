@@ -415,8 +415,10 @@ void ipwd_check_context_verify (void)
   }
 
   if (check_context.dev.state == IPWD_DEVICE_STATE_UNUSABLE) {
-      ipwd_message(IPWD_MSG_TYPE_ALERT, "can't find dev: %s", check_context.misc);
-      check_context.stage = -1;
+    ipwd_message(IPWD_MSG_TYPE_ALERT, "can't find dev: %s - %s", check_context.ip, check_context.misc);
+    check_context.stage = -1;
+  } else {
+    ipwd_message(IPWD_MSG_TYPE_DEBUG, "check ip %s use dev: %s", check_context.ip, check_context.dev.device);
   }
 }
 
