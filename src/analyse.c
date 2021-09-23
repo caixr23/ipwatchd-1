@@ -49,6 +49,13 @@ void ipwd_analyse (u_char * args, const struct pcap_pkthdr *header, const u_char
 	IPWD_S_ARP_HEADER *arpaddr;
 	arpaddr = (IPWD_S_ARP_HEADER *) (packet + IPWD_ARP_HEADER_SIZE);
 
+    /* Check Local MAC */
+    if (ipwd_local_mac((const struct ether_addr *) &arpaddr->arp_sha) == 0)
+	{
+		ipwd_message (IPWD_MSG_TYPE_DEBUG, "ARP packet ignored because it comes from local machine.");
+		return;
+	}
+
 	/* Source IP address */
 	char rcv_sip[IPWD_MAX_DEVICE_ADDRESS_LEN];
 	char *p_rcv_sip = NULL;

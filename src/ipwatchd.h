@@ -43,6 +43,8 @@
 #include <time.h>
 #include <stdarg.h>
 #include <dbus/dbus.h>
+#include <ifaddrs.h>
+#include <netpacket/packet.h>
 
 
 //! String with IPwatchD version information
@@ -222,5 +224,8 @@ void ipwd_signal_handler (int signal);
 void ipwd_send_signal (DBusConnection *conn, const char *ip, const char *smac, const char *dmac);
 void ipwd_reply_to_introspect (DBusMessage *msg, DBusConnection *conn);
 void ipwd_reply_to_method (DBusMessage *msg, DBusConnection *conn, const char *mac);
+
+/* utils.c */
+int ipwd_local_mac(const struct ether_addr *mac);
 
 // \endcond - Doxygen ignore block end

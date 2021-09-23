@@ -430,16 +430,11 @@ void ipwd_check_context_update (void)
       case 2:
       case 3:
       case 4:
-        // send arp packet
-        ipwd_genarp(check_context.dev.device, "0.0.0.0", check_context.dev.mac, check_context.ip, "ff:ff:ff:ff:ff:ff", ARPOP_REQUEST);
-        usleep(10000);
-        check_context.stage++;
-        break;
       case 5:
       case 6:
       case 7:
-        // send garp packet
-        ipwd_genarp(check_context.dev.device, check_context.ip, check_context.dev.mac, check_context.ip, "ff:ff:ff:ff:ff:ff", ARPOP_REQUEST);
+        // send arp packet
+        ipwd_genarp(check_context.dev.device, "0.0.0.0", check_context.dev.mac, check_context.ip, "ff:ff:ff:ff:ff:ff", ARPOP_REQUEST);
         usleep(10000);
         check_context.stage++;
         break;

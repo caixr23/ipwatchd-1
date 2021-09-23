@@ -6,9 +6,9 @@ CFLAGS= -g -Wall -O2
 LIBS= -lpcap -lnet -ldbus-1
 CFLAGS += `pkg-config --cflags dbus-1`
 
-all: analyse.o config.o daemonize.o devinfo.o genarp.o ipwatchd.o message.o signal.o dbus.o
+all: analyse.o config.o daemonize.o devinfo.o genarp.o ipwatchd.o message.o signal.o dbus.o utils.o
 	$(CC) $(CFLAGS) analyse.o config.o daemonize.o devinfo.o genarp.o \
-	ipwatchd.o message.o signal.o dbus.o -o ipwatchd $(LIBS)
+	ipwatchd.o message.o signal.o dbus.o utils.o -o ipwatchd $(LIBS)
 
 
 analyse.o: analyse.c ipwatchd.h
@@ -37,6 +37,9 @@ signal.o: signal.c ipwatchd.h
 
 dbus.o: dbus.c ipwatchd.h
 	$(CC) $(CFLAGS) -c dbus.c -o dbus.o
+
+utils.o: utils.c ipwatchd.h
+	$(CC) $(CFLAGS) -c utils.c -o utils.o
 
 clean:
 	-rm *.o
