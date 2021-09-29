@@ -375,6 +375,11 @@ void ipwd_check_context_verify (void)
     check_context.stage = -1;
     return;
   }
+  if (sip.s_addr == 0) {
+    ipwd_message (IPWD_MSG_TYPE_ERROR, "Error source IP address %s", check_context.ip);
+    check_context.stage = -1;
+    return;
+  }
 
   int i;
   memset(&check_context.dev, 0, sizeof(IPWD_S_DEV));
