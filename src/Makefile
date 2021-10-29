@@ -3,8 +3,8 @@
 
 CC= gcc
 CFLAGS= -g -Wall -O2
-LIBS= -lpcap -lnet -ldbus-1
-CFLAGS += `pkg-config --cflags dbus-1`
+LIBS= -lpcap -lnet  $(shell pkg-config --libs dbus-1)
+override CFLAGS +=  $(shell pkg-config --cflags dbus-1)
 
 all: analyse.o config.o daemonize.o devinfo.o genarp.o ipwatchd.o message.o signal.o dbus.o utils.o
 	$(CC) $(CFLAGS) analyse.o config.o daemonize.o devinfo.o genarp.o \
