@@ -22,13 +22,17 @@ int ipwd_local_mac(const struct ether_addr *mac) {
       break;
     case AF_PACKET:
       s = (struct sockaddr_ll *)ifap->ifa_addr;
-      if (memcmp(s->sll_addr, mac, sizeof(struct ether_addr)) == 0)
+      if (memcmp(s->sll_addr, mac, sizeof(struct ether_addr)) == 0) {
+        freeifaddrs(ifa);
         return 0;
+      }
       break;
     default:
       break;
     }
   }
+
+  freeifaddrs(ifa);
 
   return 1;
 }
