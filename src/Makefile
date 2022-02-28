@@ -5,6 +5,7 @@ CC= gcc
 CFLAGS= -g -Wall -O2
 LIBS= -lpcap -lnet  $(shell pkg-config --libs dbus-1)
 override CFLAGS +=  $(shell pkg-config --cflags dbus-1)
+override CFLAGS += -fPIC -fstack-protector-all -z relro -z noexecstack -z now -pie
 
 all: analyse.o config.o daemonize.o devinfo.o genarp.o ipwatchd.o message.o signal.o dbus.o utils.o
 	$(CC) $(CFLAGS) analyse.o config.o daemonize.o devinfo.o genarp.o \
