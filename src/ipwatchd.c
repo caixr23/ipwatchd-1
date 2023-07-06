@@ -22,9 +22,6 @@
 
 #include "ipwatchd.h"
 
-#include <dbus/dbus.h>
-#include <glib/gstdio.h>
-#include <glib.h>
 
 //! Flag indicating debug mode
 int debug_flag = 0;
@@ -48,67 +45,7 @@ pcap_t *h_pcap = NULL;
 volatile int exit_flag =  0;
 
 //! Structure that holds ip conflict check context
-IPWD_S_CHECK_CONTEXT check_context = {};
-
-DBusConnection* conn = NULL;
-GMainLoop *main_loop = NULL;
-
-void handle_dbus_message(DBusMessage* msg, const char* interface, const char* method, const char* path)
-{
-	DBusMessageIter args;
-	if (dbus_message_is_method_call(msg, interface, method) && dbus_message_has_path(msg, path)
-   		&& check_context.stage == 0) {
-         if (!dbus_message_iter_init(msg, &args)) {
-           ipwd_message(IPWD_MSG_TYPE_ERROR, "Message Has No Parameters\n");
-         } else if (DBUS_TYPE_STRING != dbus_message_iter_get_arg_type(&args)) {
-           ipwd_message(IPWD_MSG_TYPE_ERROR, "Argument is not string!");
-         } else {
-           check_context.stage++;
-           dbus_message_iter_get_basic(&args, &check_context.ip);
-         }
-
-         if (!dbus_message_iter_has_next(&args) || !dbus_message_iter_next(&args)) {
-           ipwd_message(IPWD_MSG_TYPE_ERROR, "Argument is not enough!");
-         } else if (DBUS_TYPE_STRING != dbus_message_iter_get_arg_type(&args)) {
-           ipwd_message(IPWD_MSG_TYPE_ERROR, "Argument is not string!");
-         } else {
-           check_context.stage++;
-           dbus_message_iter_get_basic(&args, &check_context.misc);
-         }
-
-         check_context.msg = msg;
-         ipwd_check_context_verify();
-       } else {
-         dbus_message_unref(msg);
-    }
-}
-
-/// @brief 声明定时器回调函数
-/// @return 返回 TRUE 表示定时器循环执行
-gboolean timer_callback()
-{
-	// 非阻塞读取下一个可用消息
-	dbus_connection_read_write(conn, 0);
-	DBusMessage* msg = dbus_connection_pop_message(conn);
-
-	if (msg != NULL) {
-		// 检查消息是否符合特定接口和方法
-		handle_dbus_message(msg, "com.deepin.system.IPWatchD", "RequestIPConflictCheck", "/com/deepin/system/IPWatchD");
-	}
-
-	ipwd_check_context_update();
-
-	if (pcap_dispatch(h_pcap, -1, ipwd_analyse, NULL) == 0) {
-		usleep(check_context.stage > 2 ? 10000 : 100000);
-	}
-
-	return G_SOURCE_CONTINUE;
-}
-
-void signal_handler(int signum)
-{
-	g_main_loop_quit(main_loop);
-}
+IPWD_S_CHECK_CONTEXT check_context;
 
 //! Main function of the ipwatchd program
 /*!
@@ -304,6 +241,9 @@ int main (int argc, char *argv[])
     /* Loop until SIGTERM calls pcap_breakloop */
     /* pcap_loop(h_pcap, -1, ipwd_analyse, NULL); */
 
+   DBusMessage* msg;
+   DBusMessageIter args;
+   DBusConnection* conn;
    DBusError err;
    int ret;
 
@@ -334,22 +274,47 @@ int main (int argc, char *argv[])
       return (IPWD_RV_ERROR);
    }
 
-	// 创建 GMainLoop 对象
-	main_loop = g_main_loop_new(NULL, TRUE);
+   while (!exit_flag) {
+     // non blocking read of the next available message
+     dbus_connection_read_write(conn, 0);
+     msg = dbus_connection_pop_message(conn);
 
-	// 注册信号处理函数（例如，捕获 SIGINT 和 SIGTERM 信号）
-	signal(SIGINT, signal_handler);
-	signal(SIGTERM, signal_handler);
+     if (msg != NULL) {
+       // check this is a method call for the right interface & method
+       if (dbus_message_is_method_call(msg, "com.deepin.system.IPWatchD", "RequestIPConflictCheck") &&
+         dbus_message_has_path(msg, "/com/deepin/system/IPWatchD") &&
+         check_context.stage == 0) {
+         // read the parameters
+         if (!dbus_message_iter_init(msg, &args)) {
+           ipwd_message(IPWD_MSG_TYPE_ERROR, "Message Has No Parameters\n");
+         } else if (DBUS_TYPE_STRING != dbus_message_iter_get_arg_type(&args)) {
+           ipwd_message(IPWD_MSG_TYPE_ERROR, "Argument is not string!");
+         } else {
+           check_context.stage++;
+           dbus_message_iter_get_basic(&args, &check_context.ip);
+         }
+         if (!dbus_message_iter_has_next(&args) || !dbus_message_iter_next(&args)) {
+           ipwd_message(IPWD_MSG_TYPE_ERROR, "Argument is not enough!");
+         } else if (DBUS_TYPE_STRING != dbus_message_iter_get_arg_type(&args)) {
+           ipwd_message(IPWD_MSG_TYPE_ERROR, "Argument is not string!");
+         } else {
+           check_context.stage++;
+           dbus_message_iter_get_basic(&args, &check_context.misc);
+         }
 
-	// 创建定时器
-	guint timer_id = g_timeout_add(0, timer_callback, NULL);
+         check_context.msg = msg;
+         ipwd_check_context_verify();
+       } else {
+         dbus_message_unref(msg);
+       }
+     }
 
-	// 进入事件循环
-	g_main_loop_run(main_loop);
+     ipwd_check_context_update();
 
-	// 主事件循环结束后，释放资源
- 	g_source_remove(timer_id);
-	g_main_loop_unref(main_loop);
+     if (pcap_dispatch (h_pcap, -1, ipwd_analyse, NULL) == 0) {
+       usleep(check_context.stage > 2 ? 10000 : 100000);
+     }
+   }
 
 	pcap_close (h_pcap);
 

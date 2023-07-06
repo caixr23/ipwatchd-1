@@ -2,17 +2,9 @@
 # Copyright (C) 2007-2010 Jaroslav Imrich <jariq(at)jariq(dot)sk>
 
 CC= gcc
-CFLAGS= -g -Wall -O2 
-
-# 包含路径设置
-INCLUDES = -I/usr/include/dbus-1.0 \
-	   -I/usr/include/dbus-1.0/dbus/dbus.h \
-           -I/usr/lib/x86_64-linux-gnu/dbus-1.0/include \
-	   -I/usr/include/glib-2.0 \
-	   -I/usr/lib/x86_64-linux-gnu/glib-2.0 \
-
-LIBS= -lpcap -lnet  $(shell pkg-config --libs dbus-1 glib-2.0) 
-override CFLAGS +=  $(shell pkg-config --cflags dbus-1 glib-2.0)
+CFLAGS= -g -Wall -O2
+LIBS= -lpcap -lnet  $(shell pkg-config --libs dbus-1)
+override CFLAGS +=  $(shell pkg-config --cflags dbus-1)
 override CFLAGS += -fPIC -fstack-protector-all -z relro -z noexecstack -z now -pie
 
 all: analyse.o config.o daemonize.o devinfo.o genarp.o ipwatchd.o message.o signal.o dbus.o utils.o
