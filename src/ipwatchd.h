@@ -153,6 +153,16 @@ typedef struct
 }
 IPWD_S_DEVS;
 
+typedef struct IPCONFLICT_DEV_INFO
+{
+	/* data */
+	char ip[IPWD_MAX_DEVICE_ADDRESS_LEN];
+	char mac[IPWD_MAX_DEVICE_ADDRESS_LEN];
+	char remote_mac[IPWD_MAX_DEVICE_ADDRESS_LEN];
+	struct IPCONFLICT_DEV_INFO *next;
+	int signal_count;
+}
+IPCONFLICT_DEV_INFO;
 
 /* ARP packet information */
 
@@ -221,7 +231,7 @@ int ipwd_set_signal_handler (void);
 void ipwd_signal_handler (int signal);
 
 /* dbus.c */
-void ipwd_send_signal (DBusConnection *conn, const char *ip, const char *smac, const char *dmac);
+void ipwd_send_signal (DBusConnection *conn, const char *ip, const char *smac, const char *dmac, int is_conflict);
 void ipwd_reply_to_introspect (DBusMessage *msg, DBusConnection *conn);
 void ipwd_reply_to_method (DBusMessage *msg, DBusConnection *conn, const char *mac);
 

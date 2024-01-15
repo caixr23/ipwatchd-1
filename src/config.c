@@ -27,7 +27,7 @@
 extern int debug_flag;
 extern IPWD_S_DEVS devices;
 extern IPWD_S_CONFIG config;
-
+extern IPCONFLICT_DEV_INFO *ipconflict_dev_info;
 
 //! Checks existence of the file
 /*!
@@ -80,6 +80,12 @@ int ipwd_read_config (const char *filename)
 	config.mode = IPWD_CONFIGURATION_MODE_AUTOMATIC;
 	devices.dev = NULL;
 	devices.devnum = 0;
+
+	ipconflict_dev_info = (IPCONFLICT_DEV_INFO *)malloc(sizeof(IPCONFLICT_DEV_INFO));
+	memset(ipconflict_dev_info->ip, 0, IPWD_MAX_DEVICE_ADDRESS_LEN);
+	memset(ipconflict_dev_info->mac, 0, IPWD_MAX_DEVICE_ADDRESS_LEN);
+	memset(ipconflict_dev_info->remote_mac, 0, IPWD_MAX_DEVICE_ADDRESS_LEN);
+	ipconflict_dev_info->next = NULL;
 
 	if ((fr = fopen (filename, "r")) == NULL)
 	{

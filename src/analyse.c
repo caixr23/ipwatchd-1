@@ -28,6 +28,7 @@ extern IPWD_S_DEVS devices;
 extern IPWD_S_CONFIG config;
 extern int testing_flag;
 extern IPWD_S_CHECK_CONTEXT check_context;
+extern IPCONFLICT_DEV_INFO *ipconflict_dev_info;
 
 
 //! Callback for "pcap_loop" with standard parameters. Called when ARP packet is received (detection of conflict is done here).
@@ -168,6 +169,30 @@ void ipwd_analyse (u_char * args, const struct pcap_pkthdr *header, const u_char
 			/* Check if received packet causes conflict with IP address of this interface */
 			if (!((strcasecmp (rcv_sip, devices.dev[i].ip) == 0) && (strcasecmp (rcv_smac, devices.dev[i].mac) != 0)))
 			{
+				IPCONFLICT_DEV_INFO *pre = ipconflict_dev_info;
+				IPCONFLICT_DEV_INFO *info = pre->next;
+				while (info)
+				{
+					if (strcasecmp(info->ip, devices.dev[i].ip) == 0
+						&& strcasecmp(info->mac , devices.dev[i].mac) == 0
+						&& strcasecmp(info->remote_mac, rcv_smac) == 0)
+					{
+						if (info->signal_count > 0)
+						{
+							info->signal_count--;
+						}
+						else
+						{
+							ipwd_send_signal(check_context.conn, devices.dev[i].ip, devices.dev[i].mac, rcv_smac, 0);
+							pre->next = info->next;
+							free(info);
+						}
+						break;
+					}
+					pre = info;
+					info = info->next;
+				}
+
 				ipwd_message (IPWD_MSG_TYPE_DEBUG, "Packet does not conflict with: %s %s-%s", devices.dev[i].device, devices.dev[i].ip, devices.dev[i].mac);
 				continue;
 			}
@@ -209,7 +234,42 @@ void ipwd_analyse (u_char * args, const struct pcap_pkthdr *header, const u_char
 			ipwd_message (IPWD_MSG_TYPE_ALERT, "MAC address %s causes IP conflict with address %s set on interface %s - passive mode - reply not sent", rcv_smac, devices.dev[i].ip, devices.dev[i].device);
 		}
 
-        ipwd_send_signal(check_context.conn, devices.dev[i].ip, devices.dev[i].mac, rcv_smac);
+        ipwd_send_signal(check_context.conn, devices.dev[i].ip, devices.dev[i].mac, rcv_smac, 1);
+
+		/* Add ipConflict info to list record*/
+		int exist = 0;
+		IPCONFLICT_DEV_INFO *tail = ipconflict_dev_info;
+		IPCONFLICT_DEV_INFO *info = ipconflict_dev_info->next;
+		while (info)
+		{
+			if (strcasecmp(info->ip, devices.dev[i].ip) == 0
+				&& strcasecmp(info->mac , devices.dev[i].mac) == 0
+				&& strcasecmp(info->remote_mac, rcv_smac) == 0)
+			{
+				if (info->signal_count < 3)
+				{
+					info->signal_count = 3;
+				}
+				exist = 1;
+			}
+			if (info != NULL)
+			{
+				tail = info;
+			}
+			info = info->next;
+		}
+		
+		if (exist == 0)
+		{
+			IPCONFLICT_DEV_INFO *newdevinfo = (IPCONFLICT_DEV_INFO *)malloc(sizeof(IPCONFLICT_DEV_INFO));			
+			memcpy (newdevinfo->ip, devices.dev[i].ip, IPWD_MAX_DEVICE_ADDRESS_LEN);
+			memcpy (newdevinfo->mac, devices.dev[i].mac, IPWD_MAX_DEVICE_ADDRESS_LEN);
+			memcpy (newdevinfo->remote_mac, rcv_smac, IPWD_MAX_DEVICE_ADDRESS_LEN);
+			ipwd_message (IPWD_MSG_TYPE_DEBUG, "Conflicted ip:%s mac %s remote_mac %s", newdevinfo->ip, newdevinfo->mac, newdevinfo->remote_mac);
+			newdevinfo->signal_count = 3;
+			newdevinfo->next = NULL;
+			tail->next = newdevinfo;
+		}
 
 		if (config.script != NULL)
 		{

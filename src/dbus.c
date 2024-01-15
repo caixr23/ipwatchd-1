@@ -1,14 +1,14 @@
 #include "ipwatchd.h"
 
-void ipwd_send_signal(DBusConnection *conn, const char *ip, const char *smac, const char *dmac) {
+void ipwd_send_signal(DBusConnection *conn, const char *ip, const char *smac, const char *dmac, int is_conflict) {
   DBusMessage *msg;
   dbus_uint32_t serial = 0;
 
   // create a signal & check for errors
   msg = dbus_message_new_signal(
-      "/com/deepin/system/IPWatchD", // object name of the signal
-      "com.deepin.system.IPWatchD",  // interface name of the signal
-      "IPConflict");                // name of the signal
+      "/com/deepin/system/IPWatchD",                                    // object name of the signal
+      "com.deepin.system.IPWatchD",                                     // interface name of the signal
+      is_conflict ? "IPConflict" : "IPConflictReslove");                // name of the signal
   if (NULL == msg) {
     ipwd_message(IPWD_MSG_TYPE_ERROR, "Message Null");
     return;

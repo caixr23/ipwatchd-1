@@ -47,6 +47,8 @@ volatile int exit_flag =  0;
 //! Structure that holds ip conflict check context
 IPWD_S_CHECK_CONTEXT check_context;
 
+IPCONFLICT_DEV_INFO *ipconflict_dev_info;
+
 //! Main function of the ipwatchd program
 /*!
  * \param argc Number of received command line arguments
@@ -333,6 +335,14 @@ int main (int argc, char *argv[])
 	{
 		free (devices.dev);
 		devices.dev = NULL;
+	}
+
+	IPCONFLICT_DEV_INFO *ipconflictinfo = ipconflict_dev_info;
+	while (ipconflictinfo)
+	{
+		IPCONFLICT_DEV_INFO *tmp = ipconflictinfo;
+		ipconflictinfo = ipconflictinfo->next;
+		free(tmp);
 	}
 
 	return (IPWD_RV_SUCCESS);
