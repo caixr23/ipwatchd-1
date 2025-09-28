@@ -78,6 +78,7 @@ int ipwd_read_config (const char *filename)
 	config.script = NULL;
 	config.defend_interval = 0;
 	config.mode = IPWD_CONFIGURATION_MODE_AUTOMATIC;
+	config.update_interval = 30;	// Default update interval is 30 seconds
 	devices.dev = NULL;
 	devices.devnum = 0;
 
@@ -247,6 +248,20 @@ int ipwd_read_config (const char *filename)
 			if ((config.defend_interval < 0) || (config.defend_interval > 600))
 			{
 				ipwd_message (IPWD_MSG_TYPE_ERROR, "Configuration parse error : defend_interval value must be between 0 and 600");
+				return (IPWD_RV_ERROR);
+			}
+
+			continue;
+		}
+
+		/* Interval for updating device information */
+		if (strcasecmp (variable, "update_interval") == 0)
+		{
+			config.update_interval = strtol (value, NULL, 10);
+
+			if (config.update_interval < 1)
+			{
+				ipwd_message (IPWD_MSG_TYPE_ERROR, "Configuration parse error : update_interval value must be at least 1 second");
 				return (IPWD_RV_ERROR);
 			}
 

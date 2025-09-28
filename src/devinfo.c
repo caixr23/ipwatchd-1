@@ -113,6 +113,156 @@ int ipwd_devinfo (const char *p_dev, char *p_ip, char *p_mac)
 }
 
 
+//! Dynamically updates the devices structure with current network interfaces
+/*!
+ * This function should be called periodically to detect new network interfaces
+ * that may have been added after program startup.
+ * \return IPWD_RV_SUCCESS if successful IPWD_RV_ERROR otherwise
+ */
+int ipwd_update_devices (void)
+{
+	int sock = -1;
+
+	char ifaces_buf[10240];
+	struct ifconf ifc;
+	struct ifreq * ifr = NULL;
+	struct ifreq * iface = NULL;
+
+	int ifaces_num = 0;
+	int i = 0, j = 0;
+	int found = 0;
+
+	pcap_t *h_pcap = NULL;
+	char errbuf[PCAP_ERRBUF_SIZE];
+
+	memset (ifaces_buf, 0, sizeof (ifaces_buf));
+	memset (&ifc, 0, sizeof (ifc));
+	memset (errbuf, 0, PCAP_ERRBUF_SIZE);
+
+	/* Create UDP socket */
+	sock = socket (AF_INET, SOCK_DGRAM, 0);
+	if (sock < 0)
+	{
+		ipwd_message (IPWD_MSG_TYPE_ERROR, "Could not open socket for device update");
+		return (IPWD_RV_ERROR);
+	}
+
+	/* Set buffer */
+	ifc.ifc_len = sizeof (ifaces_buf);
+	ifc.ifc_buf = ifaces_buf;
+
+	/* Get current list of interfaces */
+	if (ioctl (sock, SIOCGIFCONF, &ifc) < 0)
+	{
+		ipwd_message (IPWD_MSG_TYPE_ERROR, "Could not retrieve current list of network interfaces");
+		close (sock);
+		return (IPWD_RV_ERROR);
+	}
+
+	/* Determine number of interfaces */
+	ifaces_num = ifc.ifc_len / sizeof (struct ifreq);
+
+	/* Get pointer to array with interfaces */
+	ifr = ifc.ifc_req;
+
+	/* Loop through current array with interfaces */
+	for (i = 0; i < ifaces_num; i++)
+	{
+		iface = &ifr[i];
+
+		/* Skip loopback devices */
+		if (ioctl(sock, SIOCGIFFLAGS, iface) < 0)
+		{
+			continue;
+		}
+
+		if (iface->ifr_ifru.ifru_flags & IFF_LOOPBACK)
+		{
+			continue;
+		}
+
+		/* Check if device is valid ethernet device */
+		h_pcap = pcap_open_live (iface->ifr_name, BUFSIZ, 0, 0, errbuf);
+		if (h_pcap == NULL)
+		{
+			continue;
+		}
+
+		if (pcap_datalink (h_pcap) != DLT_EN10MB)
+		{
+			pcap_close (h_pcap);
+			continue;
+		}
+
+		pcap_close (h_pcap);
+
+		/* Check if this interface is already in our devices list */
+		found = 0;
+		for (j = 0; j < devices.devnum; j++)
+		{
+			if (strcasecmp (iface->ifr_name, devices.dev[j].device) == 0)
+			{
+				found = 1;
+				break;
+			}
+		}
+
+		/* If interface is not in our list, add it */
+		if (!found)
+		{
+			ipwd_message (IPWD_MSG_TYPE_DEBUG, "New network interface detected: %s", iface->ifr_name);
+			/* Put new interface into devices structure */
+			IPWD_S_DEV *temp_dev = (IPWD_S_DEV *) realloc(devices.dev, (devices.devnum + 1) * sizeof(IPWD_S_DEV));
+			if (temp_dev == NULL) {
+				ipwd_message (IPWD_MSG_TYPE_ERROR, "Unable to resize devices structure for new interface");
+				close (sock);
+				return (IPWD_RV_ERROR);
+			}
+			if (devices.dev != NULL) {
+				free(devices.dev);
+				devices.dev = NULL;
+			}
+			devices.dev = temp_dev;
+
+			memset (devices.dev[devices.devnum].device, '\0', IPWD_MAX_DEVICE_NAME_LEN);
+			strncpy (devices.dev[devices.devnum].device, iface->ifr_name, IPWD_MAX_DEVICE_NAME_LEN - 1);
+			devices.dev[devices.devnum].mode = IPWD_PROTECTION_MODE_ACTIVE;
+
+			/* Set time of last conflict */
+			devices.dev[devices.devnum].time.tv_sec = 0;
+			devices.dev[devices.devnum].time.tv_usec = 0;
+
+			/* Initialize device state - try to get current IP and MAC info */
+			char ip[IPWD_MAX_DEVICE_ADDRESS_LEN];
+			char mac[IPWD_MAX_DEVICE_ADDRESS_LEN];
+			if (ipwd_devinfo (iface->ifr_name, ip, mac) == IPWD_RV_SUCCESS)
+			{
+				devices.dev[devices.devnum].state = IPWD_DEVICE_STATE_USABLE;
+				strncpy (devices.dev[devices.devnum].ip, ip, IPWD_MAX_DEVICE_ADDRESS_LEN - 1);
+				strncpy (devices.dev[devices.devnum].mac, mac, IPWD_MAX_DEVICE_ADDRESS_LEN - 1);
+				ipwd_message (IPWD_MSG_TYPE_DEBUG, "Added device %s with IP %s and MAC %s (USABLE)",
+					devices.dev[devices.devnum].device, ip, mac);
+			}
+			else
+			{
+				devices.dev[devices.devnum].state = IPWD_DEVICE_STATE_UNUSABLE;
+				memset (devices.dev[devices.devnum].ip, '\0', IPWD_MAX_DEVICE_ADDRESS_LEN);
+				memset (devices.dev[devices.devnum].mac, '\0', IPWD_MAX_DEVICE_ADDRESS_LEN);
+				ipwd_message (IPWD_MSG_TYPE_DEBUG, "Added device %s (UNUSABLE - no IP address)",
+					devices.dev[devices.devnum].device);
+			}
+
+			devices.devnum = devices.devnum + 1;
+		}
+	}
+
+	/* Close socket */
+	close (sock);
+
+	return (IPWD_RV_SUCCESS);
+}
+
+
 //! Gets list of available network interfaces and fills devices structure with acquired information
 /*!
  * Based on example from: http://www.doctort.org/adam/nerd-notes/enumerating-network-interfaces-on-linux.html

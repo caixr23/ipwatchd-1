@@ -162,11 +162,15 @@ int main (int argc, char *argv[])
 	free (config_file);
 	config_file = NULL;
 
-	/* Daemonize */
-	if (ipwd_daemonize () != IPWD_RV_SUCCESS)
-	{
-		ipwd_message (IPWD_MSG_TYPE_ERROR, "Unable to daemonize");
-		return (IPWD_RV_ERROR);
+	/* Daemonize - Skip daemonization in debug mode for easier debugging */
+	if (!debug_flag) {
+		if (ipwd_daemonize () != IPWD_RV_SUCCESS)
+		{
+			ipwd_message (IPWD_MSG_TYPE_ERROR, "Unable to daemonize");
+			return (IPWD_RV_ERROR);
+		}
+	} else {
+		ipwd_message (IPWD_MSG_TYPE_INFO, "Running in debug mode - skipping daemonization");
 	}
 
 	ipwd_message (IPWD_MSG_TYPE_INFO, "IPwatchD started");
@@ -282,6 +286,12 @@ int main (int argc, char *argv[])
      msg = dbus_connection_pop_message(conn);
 
      if (msg != NULL) {
+        // 检查并处理Introspect消息
+        if (dbus_message_is_method_call(msg, "org.freedesktop.DBus.Introspectable", "Introspect")) {
+            ipwd_reply_to_introspect(msg, conn);
+            dbus_message_unref(msg);
+            continue;
+        }
        // check this is a method call for the right interface & method
        if (dbus_message_is_method_call(msg, "com.deepin.system.IPWatchD", "RequestIPConflictCheck") &&
          dbus_message_has_path(msg, "/com/deepin/system/IPWatchD") &&
@@ -311,6 +321,12 @@ int main (int argc, char *argv[])
        }
      }
 
+     static time_t last_update_time = 0;
+     time_t current_time = time(NULL);
+     if (current_time - last_update_time >= config.update_interval) {
+        ipwd_update_devices();
+        last_update_time = current_time;
+     }
      ipwd_check_context_update();
 
      if (pcap_dispatch (h_pcap, -1, ipwd_analyse, NULL) == 0) {
@@ -432,6 +448,7 @@ void ipwd_check_context_verify (void)
   if (check_context.dev.state == IPWD_DEVICE_STATE_UNUSABLE) {
     ipwd_message(IPWD_MSG_TYPE_ALERT, "can't find dev: %s - %s", check_context.ip, check_context.misc);
     check_context.stage = -1;
+    ipwd_reply_to_method(check_context.msg, check_context.conn, "");
   } else {
     ipwd_message(IPWD_MSG_TYPE_DEBUG, "check ip %s use dev: %s", check_context.ip, check_context.dev.device);
   }
