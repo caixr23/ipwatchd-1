@@ -239,5 +239,6 @@ void ipwd_reply_to_method (DBusMessage *msg, DBusConnection *conn, const char *m
 
 /* utils.c */
 int ipwd_local_mac(const struct ether_addr *mac);
+int ipwd_local_mac_by_interface(const char *interface, char **mac);
 
 // \endcond - Doxygen ignore block end

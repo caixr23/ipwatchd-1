@@ -312,6 +312,15 @@ int main (int argc, char *argv[])
          } else {
            check_context.stage++;
            dbus_message_iter_get_basic(&args, &check_context.misc);
+           // get mac address by interface
+           char *tmp_mac = NULL;
+           if (ipwd_local_mac_by_interface(check_context.misc, &tmp_mac) == 0 && tmp_mac != NULL) {
+             size_t mac_size = strlen(tmp_mac);
+             memcpy(check_context.dev.mac, tmp_mac, mac_size);
+             check_context.dev.mac[mac_size] = '\0';
+           } else {
+             check_context.stage = -1;
+           }
          }
 
          check_context.msg = msg;
@@ -408,6 +417,9 @@ void ipwd_check_context_verify (void)
   }
 
   int i;
+  char tmp_mac[IPWD_MAX_DEVICE_ADDRESS_LEN] = {0};
+  size_t mac_size = strlen(check_context.dev.mac);
+  memcpy(tmp_mac, check_context.dev.mac, mac_size);
   memset(&check_context.dev, 0, sizeof(IPWD_S_DEV));
   check_context.dev.state = IPWD_DEVICE_STATE_UNUSABLE;
 
@@ -435,14 +447,9 @@ void ipwd_check_context_verify (void)
     }
   } else {
     strncpy(check_context.dev.device, check_context.misc, IPWD_MAX_DEVICE_NAME_LEN - 1);
-    for (i = 0; i < devices.devnum; i++) {
-      if (strcasecmp (check_context.dev.device, devices.dev[i].device) == 0) {
-        if (ipwd_devinfo (check_context.dev.device, check_context.dev.ip, check_context.dev.mac) != IPWD_RV_ERROR) {
-          check_context.dev.state = IPWD_DEVICE_STATE_USABLE;
-        }
-        break;
-      }
-    }
+    strncpy(check_context.dev.mac, tmp_mac, mac_size);
+    check_context.dev.mac[mac_size] = 0;
+    check_context.dev.state = IPWD_DEVICE_STATE_USABLE;
   }
 
   if (check_context.dev.state == IPWD_DEVICE_STATE_UNUSABLE) {

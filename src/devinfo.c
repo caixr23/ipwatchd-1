@@ -218,10 +218,6 @@ int ipwd_update_devices (void)
 				close (sock);
 				return (IPWD_RV_ERROR);
 			}
-			if (devices.dev != NULL) {
-				free(devices.dev);
-				devices.dev = NULL;
-			}
 			devices.dev = temp_dev;
 
 			memset (devices.dev[devices.devnum].device, '\0', IPWD_MAX_DEVICE_NAME_LEN);
