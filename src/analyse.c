@@ -177,16 +177,9 @@ void ipwd_analyse (u_char * args, const struct pcap_pkthdr *header, const u_char
 						&& strcasecmp(info->mac , devices.dev[i].mac) == 0
 						&& strcasecmp(info->remote_mac, rcv_smac) == 0)
 					{
-						if (info->signal_count > 0)
-						{
-							info->signal_count--;
-						}
-						else
-						{
-							ipwd_send_signal(check_context.conn, devices.dev[i].ip, devices.dev[i].mac, rcv_smac, 0);
-							pre->next = info->next;
-							free(info);
-						}
+						ipwd_send_signal(check_context.conn, devices.dev[i].ip, devices.dev[i].mac, rcv_smac, 0);
+						pre->next = info->next;
+						free(info);
 						break;
 					}
 					pre = info;
@@ -246,10 +239,6 @@ void ipwd_analyse (u_char * args, const struct pcap_pkthdr *header, const u_char
 				&& strcasecmp(info->mac , devices.dev[i].mac) == 0
 				&& strcasecmp(info->remote_mac, rcv_smac) == 0)
 			{
-				if (info->signal_count < 3)
-				{
-					info->signal_count = 3;
-				}
 				exist = 1;
 			}
 			if (info != NULL)
@@ -266,7 +255,6 @@ void ipwd_analyse (u_char * args, const struct pcap_pkthdr *header, const u_char
 			memcpy (newdevinfo->mac, devices.dev[i].mac, IPWD_MAX_DEVICE_ADDRESS_LEN);
 			memcpy (newdevinfo->remote_mac, rcv_smac, IPWD_MAX_DEVICE_ADDRESS_LEN);
 			ipwd_message (IPWD_MSG_TYPE_DEBUG, "Conflicted ip:%s mac %s remote_mac %s", newdevinfo->ip, newdevinfo->mac, newdevinfo->remote_mac);
-			newdevinfo->signal_count = 3;
 			newdevinfo->next = NULL;
 			tail->next = newdevinfo;
 		}

@@ -161,7 +161,6 @@ typedef struct IPCONFLICT_DEV_INFO
 	char mac[IPWD_MAX_DEVICE_ADDRESS_LEN];
 	char remote_mac[IPWD_MAX_DEVICE_ADDRESS_LEN];
 	struct IPCONFLICT_DEV_INFO *next;
-	int signal_count;
 }
 IPCONFLICT_DEV_INFO;
 
