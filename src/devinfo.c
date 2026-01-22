@@ -38,78 +38,164 @@ extern IPWD_S_DEVS devices;
  */
 int ipwd_devinfo (const char *p_dev, char *p_ip, char *p_mac)
 {
+	struct ifaddrs *ifa, *ifap;
+	int found = 0;
 
-	/* Create UDP socket */
-	int sock = -1;
-	sock = socket (AF_INET, SOCK_DGRAM, 0);
-	if (sock < 0)
+	if (getifaddrs (&ifa) == -1)
 	{
-		ipwd_message (IPWD_MSG_TYPE_ERROR, "Could not open socket");
+		ipwd_message (IPWD_MSG_TYPE_ERROR, "getifaddrs error");
 		return (IPWD_RV_ERROR);
 	}
 
-	struct ifreq ifr;
-	memset (&ifr, 0, sizeof(struct ifreq));
-	ifr.ifr_addr.sa_family = AF_INET;
-	strcpy (ifr.ifr_name, p_dev);
-
-	/* Get IP address of interface */
-	if (ioctl (sock, SIOCGIFADDR, &ifr) < 0)
+	/* Get MAC address first */
+	for (ifap = ifa; ifap != NULL; ifap = ifap->ifa_next)
 	{
-		/* Do not log error for interfaces without IP address */
-		if (errno == EADDRNOTAVAIL)
+		if (ifap->ifa_addr != NULL && ifap->ifa_addr->sa_family == AF_PACKET
+			&& strcmp (ifap->ifa_name, p_dev) == 0)
 		{
-			close (sock);
-			return (IPWD_RV_ERROR);
+			struct sockaddr_ll *s = (struct sockaddr_ll *)ifap->ifa_addr;
+			char *p_dev_mac = ether_ntoa((struct ether_addr *)s->sll_addr);
+			if (p_dev_mac != NULL)
+			{
+				memset (p_mac, '\0', IPWD_MAX_DEVICE_ADDRESS_LEN);
+				strncpy (p_mac, p_dev_mac, IPWD_MAX_DEVICE_ADDRESS_LEN - 1);
+				found = 1;
+				break;
+			}
 		}
-
-		ipwd_message (IPWD_MSG_TYPE_ERROR, "Could not retrieve IP address of the device \"%s\" : %s", p_dev, strerror(errno));
-		close (sock);
-		return (IPWD_RV_ERROR);
 	}
 
-	char *p_dev_ip = NULL;
-
-	/* Following variable was added because gcc 4.4.1 displayed warning: dereferencing pointer ‘({anonymous})’ does break strict-aliasing rules */
-	struct in_addr sin_addr = ((struct sockaddr_in *) &ifr.ifr_addr)->sin_addr;
-
-	if ((p_dev_ip = inet_ntoa (sin_addr)) == NULL)
+	if (!found)
 	{
-		ipwd_message (IPWD_MSG_TYPE_ERROR, "Could not convert IP address of the device \"%s\"", p_dev);
-		close (sock);
+		ipwd_message (IPWD_MSG_TYPE_ERROR, "Could not retrieve MAC address of the device \"%s\"", p_dev);
+		freeifaddrs(ifa);
 		return (IPWD_RV_ERROR);
 	}
 
-	memset (p_ip, '\0', IPWD_MAX_DEVICE_ADDRESS_LEN);
-	strncpy (p_ip, p_dev_ip, IPWD_MAX_DEVICE_ADDRESS_LEN - 1);
-
-	/* Get MAC address of interface */
-	if (ioctl (sock, SIOCGIFHWADDR, &ifr) < 0)
+	/* Get all IP addresses */
+	found = 0;
+	for (ifap = ifa; ifap != NULL; ifap = ifap->ifa_next)
 	{
-		ipwd_message (IPWD_MSG_TYPE_ERROR, "Could not retrieve IP address of the device \"%s\"", p_dev);
-		close (sock);
-		return (IPWD_RV_ERROR);
+		if (ifap->ifa_addr != NULL && ifap->ifa_addr->sa_family == AF_INET
+			&& strcmp (ifap->ifa_name, p_dev) == 0)
+		{
+			struct sockaddr_in *sin = (struct sockaddr_in *)ifap->ifa_addr;
+			char *p_dev_ip = inet_ntoa(sin->sin_addr);
+			if (p_dev_ip != NULL)
+			{
+				/* Store first IP for backward compatibility */
+				if (!found)
+				{
+					memset (p_ip, '\0', IPWD_MAX_DEVICE_ADDRESS_LEN);
+					strncpy (p_ip, p_dev_ip, IPWD_MAX_DEVICE_ADDRESS_LEN - 1);
+					found = 1;
+				}
+				ipwd_message (IPWD_MSG_TYPE_DEBUG, "Device %s has IP: %s", p_dev, p_dev_ip);
+			}
+		}
 	}
 
-	char *p_dev_mac = NULL;
+	freeifaddrs(ifa);
 
-	if ((p_dev_mac = ether_ntoa ((const struct ether_addr *) &ifr.ifr_hwaddr.sa_data[0])) == NULL)
+	if (!found)
 	{
-		ipwd_message (IPWD_MSG_TYPE_ERROR, "Could not convert IP address of the device \"%s\"", p_dev);
-		close (sock);
+		ipwd_message (IPWD_MSG_TYPE_ERROR, "Could not retrieve any IP address of the device \"%s\"", p_dev);
 		return (IPWD_RV_ERROR);
 	}
-
-	memset (p_mac, '\0', IPWD_MAX_DEVICE_ADDRESS_LEN);
-	strncpy (p_mac, p_dev_mac, IPWD_MAX_DEVICE_ADDRESS_LEN - 1);
-
-	/* Close socket */
-	close (sock);
 
 	ipwd_message (IPWD_MSG_TYPE_DEBUG, "Device info: %s %s-%s", p_dev, p_ip, p_mac);
 
 	return (IPWD_RV_SUCCESS);
+}
 
+//! Gets all IP addresses of specified device
+/*!
+ * \param p_dev Name of the device (i.e. eth0)
+ * \param ips Pointer to array where IP addresses should be stored
+ * \param ipnum Pointer to number of IP addresses found
+ * \return IPWD_RV_SUCCESS if successful IPWD_RV_ERROR otherwise
+ */
+int ipwd_devinfo_all_ips (const char *p_dev, char *p_mac, IPWD_S_IP **ips, int *ipnum)
+{
+	struct ifaddrs *ifa, *ifap;
+	int count = 0;
+	int capacity = 10; /* Initial capacity */
+
+	*ips = (IPWD_S_IP *)malloc(capacity * sizeof(IPWD_S_IP));
+	if (*ips == NULL)
+	{
+		ipwd_message (IPWD_MSG_TYPE_ERROR, "malloc failed for IP addresses array");
+		return (IPWD_RV_ERROR);
+	}
+
+	if (getifaddrs (&ifa) == -1)
+	{
+		ipwd_message (IPWD_MSG_TYPE_ERROR, "getifaddrs error");
+		free(*ips);
+		return (IPWD_RV_ERROR);
+	}
+
+	/* Count and collect all IP addresses */
+	for (ifap = ifa; ifap != NULL; ifap = ifap->ifa_next)
+	{
+		if (ifap->ifa_addr != NULL && strcmp (ifap->ifa_name, p_dev) == 0)
+		{
+			if (ifap->ifa_addr->sa_family == AF_PACKET)
+			{
+				struct sockaddr_ll *s = (struct sockaddr_ll *)ifap->ifa_addr;
+				char *p_dev_mac = ether_ntoa((struct ether_addr *)s->sll_addr);
+				if (p_dev_mac != NULL)
+				{
+					memset (p_mac, '\0', IPWD_MAX_DEVICE_ADDRESS_LEN);
+					strncpy (p_mac, p_dev_mac, IPWD_MAX_DEVICE_ADDRESS_LEN - 1);
+				}
+			} else if (ifap->ifa_addr->sa_family == AF_INET)
+			{
+				struct sockaddr_in *sin = (struct sockaddr_in *)ifap->ifa_addr;
+				char *p_dev_ip = inet_ntoa(sin->sin_addr);
+				if (p_dev_ip != NULL)
+				{
+					/* Resize array if needed */
+					if (count >= capacity)
+					{
+						capacity *= 2;
+						IPWD_S_IP *temp = (IPWD_S_IP *)realloc(*ips, capacity * sizeof(IPWD_S_IP));
+						if (temp == NULL)
+						{
+							ipwd_message (IPWD_MSG_TYPE_ERROR, "realloc failed for IP addresses array");
+							freeifaddrs(ifa);
+							free(*ips);
+							return (IPWD_RV_ERROR);
+						}
+						*ips = temp;
+					}
+
+					/* Store IP address */
+					memset ((*ips)[count].ip, '\0', IPWD_MAX_DEVICE_ADDRESS_LEN);
+					strncpy ((*ips)[count].ip, p_dev_ip, IPWD_MAX_DEVICE_ADDRESS_LEN - 1);
+					(*ips)[count].time.tv_sec = 0;
+					(*ips)[count].time.tv_usec = 0;
+					count++;
+
+					ipwd_message (IPWD_MSG_TYPE_DEBUG, "Device %s has IP: %s", p_dev, p_dev_ip);
+				}
+			}
+		}
+	}
+
+	freeifaddrs(ifa);
+	*ipnum = count;
+
+	if (count == 0)
+	{
+		free(*ips);
+		*ips = NULL;
+		ipwd_message (IPWD_MSG_TYPE_ERROR, "Could not retrieve any IP address of the device \"%s\"", p_dev);
+		return (IPWD_RV_ERROR);
+	}
+
+	ipwd_message (IPWD_MSG_TYPE_DEBUG, "Device %s has %d IP addresses", p_dev, count);
+	return (IPWD_RV_SUCCESS);
 }
 
 
@@ -220,13 +306,12 @@ int ipwd_update_devices (void)
 			}
 			devices.dev = temp_dev;
 
-			memset (devices.dev[devices.devnum].device, '\0', IPWD_MAX_DEVICE_NAME_LEN);
+			/* Initialize the new device structure */
+			memset (&devices.dev[devices.devnum], 0, sizeof(IPWD_S_DEV));
 			strncpy (devices.dev[devices.devnum].device, iface->ifr_name, IPWD_MAX_DEVICE_NAME_LEN - 1);
 			devices.dev[devices.devnum].mode = IPWD_PROTECTION_MODE_ACTIVE;
-
-			/* Set time of last conflict */
-			devices.dev[devices.devnum].time.tv_sec = 0;
-			devices.dev[devices.devnum].time.tv_usec = 0;
+			devices.dev[devices.devnum].ips = NULL;
+			devices.dev[devices.devnum].ipnum = 0;
 
 			/* Initialize device state - try to get current IP and MAC info */
 			char ip[IPWD_MAX_DEVICE_ADDRESS_LEN];
@@ -234,15 +319,33 @@ int ipwd_update_devices (void)
 			if (ipwd_devinfo (iface->ifr_name, ip, mac) == IPWD_RV_SUCCESS)
 			{
 				devices.dev[devices.devnum].state = IPWD_DEVICE_STATE_USABLE;
-				strncpy (devices.dev[devices.devnum].ip, ip, IPWD_MAX_DEVICE_ADDRESS_LEN - 1);
 				strncpy (devices.dev[devices.devnum].mac, mac, IPWD_MAX_DEVICE_ADDRESS_LEN - 1);
-				ipwd_message (IPWD_MSG_TYPE_DEBUG, "Added device %s with IP %s and MAC %s (USABLE)",
-					devices.dev[devices.devnum].device, ip, mac);
+				
+				/* Get all IP addresses for this interface */
+				if (ipwd_devinfo_all_ips (iface->ifr_name, devices.dev[devices.devnum].mac, &devices.dev[devices.devnum].ips, &devices.dev[devices.devnum].ipnum) == IPWD_RV_SUCCESS)
+				{
+					ipwd_message (IPWD_MSG_TYPE_DEBUG, "Added device %s with %d IP addresses and MAC %s (USABLE)",
+						devices.dev[devices.devnum].device, devices.dev[devices.devnum].ipnum, mac);
+				}
+				else
+				{
+					/* Fallback: store at least the first IP address */
+					devices.dev[devices.devnum].ips = (IPWD_S_IP *)malloc(sizeof(IPWD_S_IP));
+					if (devices.dev[devices.devnum].ips != NULL)
+					{
+						memset (devices.dev[devices.devnum].ips[0].ip, '\0', IPWD_MAX_DEVICE_ADDRESS_LEN);
+						strncpy (devices.dev[devices.devnum].ips[0].ip, ip, IPWD_MAX_DEVICE_ADDRESS_LEN - 1);
+						devices.dev[devices.devnum].ips[0].time.tv_sec = 0;
+						devices.dev[devices.devnum].ips[0].time.tv_usec = 0;
+						devices.dev[devices.devnum].ipnum = 1;
+						ipwd_message (IPWD_MSG_TYPE_DEBUG, "Added device %s with IP %s and MAC %s (USABLE)",
+							devices.dev[devices.devnum].device, ip, mac);
+					}
+				}
 			}
 			else
 			{
 				devices.dev[devices.devnum].state = IPWD_DEVICE_STATE_UNUSABLE;
-				memset (devices.dev[devices.devnum].ip, '\0', IPWD_MAX_DEVICE_ADDRESS_LEN);
 				memset (devices.dev[devices.devnum].mac, '\0', IPWD_MAX_DEVICE_ADDRESS_LEN);
 				ipwd_message (IPWD_MSG_TYPE_DEBUG, "Added device %s (UNUSABLE - no IP address)",
 					devices.dev[devices.devnum].device);
@@ -365,9 +468,9 @@ int ipwd_fill_devices (void)
 		strncpy (devices.dev[devices.devnum].device, iface->ifr_name, IPWD_MAX_DEVICE_NAME_LEN - 1);
         devices.dev[devices.devnum].mode = IPWD_PROTECTION_MODE_ACTIVE;
 
-		/* Set time of last conflict */
-		devices.dev[devices.devnum].time.tv_sec = 0;
-		devices.dev[devices.devnum].time.tv_usec = 0;
+		/* Initialize IP addresses array to NULL - will be populated later */
+		devices.dev[devices.devnum].ips = NULL;
+		devices.dev[devices.devnum].ipnum = 0;
 
 		ipwd_message (IPWD_MSG_TYPE_DEBUG, "Found device %s", devices.dev[devices.devnum].device);
 

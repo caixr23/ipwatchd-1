@@ -416,7 +416,7 @@ void ipwd_check_context_verify (void)
     return;
   }
 
-  int i;
+  int i, j;
   char tmp_mac[IPWD_MAX_DEVICE_ADDRESS_LEN] = {0};
   size_t mac_size = strlen(check_context.dev.mac);
   memcpy(tmp_mac, check_context.dev.mac, mac_size);
@@ -428,22 +428,36 @@ void ipwd_check_context_verify (void)
     for (i = 0; i < devices.devnum; i++) {
       memset(dev.device, 0, sizeof(dev.device));
       strcpy(dev.device, devices.dev[i].device);
-      if (ipwd_devinfo (dev.device, dev.ip, dev.mac) == IPWD_RV_ERROR) {
+      
+      // 使用新的函数获取所有IP地址
+      if (ipwd_devinfo_all_ips(dev.device, dev.mac, &dev.ips, &dev.ipnum) == IPWD_RV_ERROR) {
         continue;
       }
-      if (inet_aton(dev.ip, &dip) != 0) {
-        uint8_t *p = (uint8_t*)&sip.s_addr;
-        uint8_t *q = (uint8_t*)&dip.s_addr;
+      
+      // 检查所有IP地址
+      for (j = 0; j < dev.ipnum; j++) {
+        if (inet_aton(dev.ips[j].ip, &dip) != 0) {
+          uint8_t *p = (uint8_t*)&sip.s_addr;
+          uint8_t *q = (uint8_t*)&dip.s_addr;
 
-        if (p[0] == q[0] && p[1] == q[1] && p[2] == q[2]) {
-          memcpy(&check_context.dev, &dev, sizeof(IPWD_S_DEV));
-          check_context.dev.state = IPWD_DEVICE_STATE_USABLE;
-          break;
+          if (p[0] == q[0] && p[1] == q[1] && p[2] == q[2]) {
+            memcpy(&check_context.dev, &dev, sizeof(IPWD_S_DEV));
+            check_context.dev.state = IPWD_DEVICE_STATE_USABLE;
+            break;
+          }
         }
       }
-
-      memcpy(&check_context.dev, &dev, sizeof(IPWD_S_DEV));
-      check_context.dev.state = IPWD_DEVICE_STATE_USABLE;
+      
+      if (check_context.dev.state == IPWD_DEVICE_STATE_USABLE) {
+        break;
+      }
+      
+      // 清理内存
+      if (dev.ips != NULL) {
+        free(dev.ips);
+        dev.ips = NULL;
+        dev.ipnum = 0;
+      }
     }
   } else {
     strncpy(check_context.dev.device, check_context.misc, IPWD_MAX_DEVICE_NAME_LEN - 1);

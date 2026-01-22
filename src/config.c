@@ -355,9 +355,9 @@ int ipwd_read_config (const char *filename)
 				devices.dev[devices.devnum].mode = IPWD_PROTECTION_MODE_PASSIVE;
 			}
 
-			/* Set time of last conflict */
-			devices.dev[devices.devnum].time.tv_sec = 0;
-			devices.dev[devices.devnum].time.tv_usec = 0;
+			/* Initialize IP addresses array to NULL - will be populated later */
+			devices.dev[devices.devnum].ips = NULL;
+			devices.dev[devices.devnum].ipnum = 0;
 
 			ipwd_message (IPWD_MSG_TYPE_DEBUG, "Found interface %s", devices.dev[devices.devnum].device);
 

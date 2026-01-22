@@ -134,15 +134,23 @@ typedef enum
 }
 IPWD_DEVICE_STATE;
 
+//! Structure that holds information about ONE IP address on a network interface
+typedef struct
+{
+	char ip[IPWD_MAX_DEVICE_ADDRESS_LEN];		/**< IP address */
+	struct timeval time;						/**< Time information indicating when the last conflict was detected */
+}
+IPWD_S_IP;
+
 //! Structure that holds information about ONE network interface
 typedef struct
 {
 	char device[IPWD_MAX_DEVICE_NAME_LEN];		/**< Device name */
 	IPWD_DEVICE_STATE state;					/**< Indicates if device should be used in conflict detection process */
-	char ip[IPWD_MAX_DEVICE_ADDRESS_LEN];		/**< IP address of device */
 	char mac[IPWD_MAX_DEVICE_ADDRESS_LEN];		/**< MAC address of device */
 	IPWD_PROTECTION_MODE mode;					/**< IPwatch mode on interface */
-	struct timeval time;						/**< Time information indicating when the last conflict was detected */
+	IPWD_S_IP *ips;							/**< Array of IP addresses on this interface */
+	int ipnum;								/**< Number of IP addresses on this interface */
 }
 IPWD_S_DEV;
 
@@ -213,6 +221,7 @@ int ipwd_check_pidfile (void);
 
 /* devinfo.c */
 int ipwd_devinfo (const char *p_dev, char *p_ip, char *p_mac);
+int ipwd_devinfo_all_ips (const char *p_dev, char *p_mac, IPWD_S_IP **ips, int *ipnum);
 int ipwd_fill_devices (void);
 int ipwd_update_devices (void);
 
