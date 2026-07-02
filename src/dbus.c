@@ -1,4 +1,5 @@
 #include "ipwatchd.h"
+#include <polkit/polkit.h>
 
 // Introspection XML data
 static const char *introspection_xml =
@@ -105,4 +106,110 @@ void ipwd_reply_to_method(DBusMessage *msg, DBusConnection *conn, const char *ma
 
   // free the reply
   dbus_message_unref(reply);
+}
+
+/**
+ * Sends an error reply for a DBus method call.
+ *
+ * msg is the method call being rejected, conn is the system bus connection,
+ * name is the DBus error name, and message is the human-readable error text.
+ */
+void ipwd_reply_error(DBusMessage *msg, DBusConnection *conn, const char *name, const char *message) {
+  DBusMessage *reply;
+  dbus_uint32_t serial = 0;
+
+  reply = dbus_message_new_error(msg, name, message);
+  if (reply == NULL) {
+    ipwd_message(IPWD_MSG_TYPE_ERROR, "Failed to create DBus error reply");
+    return;
+  }
+
+  if (!dbus_connection_send(conn, reply, &serial)) {
+    ipwd_message(IPWD_MSG_TYPE_ERROR, "Failed to send DBus error reply");
+    dbus_message_unref(reply);
+    return;
+  }
+
+  dbus_message_unref(reply);
+}
+
+/**
+ * Checks whether the DBus sender is allowed to request an IP conflict check.
+ *
+ * Root senders are allowed directly. Other senders are checked with polkit
+ * against IPWD_POLKIT_ACTION_REQUEST_IP_CONFLICT_CHECK. Returns 1 when the
+ * caller is authorized and 0 when authorization fails or cannot be checked.
+ */
+int ipwd_dbus_check_authorization(DBusMessage *msg, DBusConnection *conn) {
+  const char *sender;
+  DBusError dbus_err;
+  unsigned long sender_uid;
+  PolkitAuthority *authority = NULL;
+  PolkitSubject *subject = NULL;
+  PolkitAuthorizationResult *result = NULL;
+  GError *error = NULL;
+  int authorized = 0;
+
+  sender = dbus_message_get_sender(msg);
+  if (sender == NULL) {
+    ipwd_reply_error(msg, conn, DBUS_ERROR_ACCESS_DENIED, "Missing DBus sender");
+    return 0;
+  }
+
+  dbus_error_init(&dbus_err);
+  sender_uid = dbus_bus_get_unix_user(conn, sender, &dbus_err);
+  if (!dbus_error_is_set(&dbus_err) && sender_uid == 0) {
+    return 1;
+  }
+  if (dbus_error_is_set(&dbus_err)) {
+    ipwd_message(IPWD_MSG_TYPE_ERROR, "Failed to get unix user for %s: %s", sender, dbus_err.message);
+    dbus_error_free(&dbus_err);
+  }
+
+  authority = polkit_authority_get_sync(NULL, &error);
+  if (authority == NULL) {
+    ipwd_message(IPWD_MSG_TYPE_ERROR, "Unable to get polkit authority: %s", error ? error->message : "unknown error");
+    if (error != NULL) {
+      g_error_free(error);
+    }
+    ipwd_reply_error(msg, conn, DBUS_ERROR_ACCESS_DENIED, "Authorization service is unavailable");
+    return 0;
+  }
+
+  subject = polkit_system_bus_name_new(sender);
+  if (subject == NULL) {
+    g_object_unref(authority);
+    ipwd_reply_error(msg, conn, DBUS_ERROR_ACCESS_DENIED, "Unable to create authorization subject");
+    return 0;
+  }
+
+  result = polkit_authority_check_authorization_sync(
+      authority,
+      subject,
+      IPWD_POLKIT_ACTION_REQUEST_IP_CONFLICT_CHECK,
+      NULL,
+      POLKIT_CHECK_AUTHORIZATION_FLAGS_ALLOW_USER_INTERACTION,
+      NULL,
+      &error);
+
+  if (result != NULL) {
+    authorized = polkit_authorization_result_get_is_authorized(result);
+  }
+
+  if (error != NULL) {
+    ipwd_message(IPWD_MSG_TYPE_ERROR, "polkit authorization check failed: %s", error->message);
+    g_error_free(error);
+  }
+
+  if (result != NULL) {
+    g_object_unref(result);
+  }
+  g_object_unref(subject);
+  g_object_unref(authority);
+
+  if (!authorized) {
+    ipwd_reply_error(msg, conn, DBUS_ERROR_ACCESS_DENIED, "Not authorized to request IP conflict checks");
+  }
+
+  return authorized;
 }

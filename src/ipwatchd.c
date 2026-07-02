@@ -270,7 +270,7 @@ int main (int argc, char *argv[])
    check_context.conn = conn;
 
    // request our name on the bus and check for errors
-   ret = dbus_bus_request_name(conn, "com.deepin.system.IPWatchD", DBUS_NAME_FLAG_REPLACE_EXISTING , &err);
+   ret = dbus_bus_request_name(conn, IPWD_DBUS_SERVICE, DBUS_NAME_FLAG_REPLACE_EXISTING , &err);
    if (dbus_error_is_set(&err)) {
       ipwd_message(IPWD_MSG_TYPE_ERROR, "Name Error (%s)\n", err.message);
       dbus_error_free(&err);
@@ -293,9 +293,14 @@ int main (int argc, char *argv[])
             continue;
         }
        // check this is a method call for the right interface & method
-       if (dbus_message_is_method_call(msg, "com.deepin.system.IPWatchD", "RequestIPConflictCheck") &&
-         dbus_message_has_path(msg, "/com/deepin/system/IPWatchD") &&
+       if (dbus_message_is_method_call(msg, IPWD_DBUS_SERVICE, "RequestIPConflictCheck") &&
+         dbus_message_has_path(msg, IPWD_DBUS_PATH) &&
          check_context.stage == 0) {
+         if (!ipwd_dbus_check_authorization(msg, conn)) {
+           dbus_message_unref(msg);
+           continue;
+         }
+
          // read the parameters
          if (!dbus_message_iter_init(msg, &args)) {
            ipwd_message(IPWD_MSG_TYPE_ERROR, "Message Has No Parameters\n");

@@ -14,6 +14,7 @@ Source0:           %{name}-%{version}.orig.tar.xz
 BuildRequires:     gcc, libpcap-devel, libnet-devel, systemd
 BuildRequires:     make
 BuildRequires:     pkgconfig(dbus-1)
+BuildRequires:     pkgconfig(polkit-gobject-1)
 
 Requires(post):    systemd
 Requires(preun):   systemd
@@ -47,6 +48,7 @@ make -C src install DESTDIR=%{buildroot}
 %{_mandir}/man1/ipwatchd-script.1*
 %{_datadir}/dbus-1/system-services/
 %{_datadir}/dbus-1/system.d/
+%{_datadir}/polkit-1/actions/
 %doc LICENSE
 
 %changelog
