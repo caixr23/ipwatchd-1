@@ -30,6 +30,80 @@ extern int testing_flag;
 extern IPWD_S_CHECK_CONTEXT check_context;
 extern IPCONFLICT_DEV_INFO *ipconflict_dev_info;
 
+static int ipwd_run_user_script (const char *script, const char *device, const char *ip, const char *mac)
+{
+	pid_t pid;
+	pid_t wait_rv;
+	int status;
+	int waited = 0;
+	char *const argv[] = {
+		(char *) script,
+		(char *) device,
+		(char *) ip,
+		(char *) mac,
+		NULL
+	};
+
+	pid = fork ();
+	if (pid < 0)
+	{
+		ipwd_message (IPWD_MSG_TYPE_ERROR, "Unable to execute user-defined script %s - fork failed: %s", script, strerror (errno));
+		return (IPWD_RV_ERROR);
+	}
+
+	if (pid == 0)
+	{
+		execv (script, argv);
+		_exit (127);
+	}
+
+	while ((wait_rv = waitpid (pid, &status, WNOHANG)) == 0)
+	{
+		if (waited >= IPWD_SCRIPT_TIMEOUT_SECONDS)
+		{
+			if (kill (pid, SIGKILL) != 0)
+			{
+				ipwd_message (IPWD_MSG_TYPE_ERROR, "Unable to terminate timed out user-defined script %s - %s", script, strerror (errno));
+			}
+			else
+			{
+				ipwd_message (IPWD_MSG_TYPE_ERROR, "User-defined script %s timed out after %d seconds", script, IPWD_SCRIPT_TIMEOUT_SECONDS);
+			}
+
+			waitpid (pid, &status, 0);
+			return (IPWD_RV_ERROR);
+		}
+
+		sleep (1);
+		waited++;
+	}
+
+	if (wait_rv < 0)
+	{
+		ipwd_message (IPWD_MSG_TYPE_ERROR, "Unable to execute user-defined script %s - waitpid failed: %s", script, strerror (errno));
+		return (IPWD_RV_ERROR);
+	}
+
+	if (WIFEXITED (status) && WEXITSTATUS (status) == 0)
+	{
+		return (IPWD_RV_SUCCESS);
+	}
+
+	if (WIFEXITED (status))
+	{
+		ipwd_message (IPWD_MSG_TYPE_ERROR, "User-defined script %s exited with status %d", script, WEXITSTATUS (status));
+	}
+	else if (WIFSIGNALED (status))
+	{
+		ipwd_message (IPWD_MSG_TYPE_ERROR, "User-defined script %s terminated by signal %d", script, WTERMSIG (status));
+	}
+	else
+	{
+		ipwd_message (IPWD_MSG_TYPE_ERROR, "User-defined script %s did not complete successfully", script);
+	}
+
+	return (IPWD_RV_ERROR);
+}
 
 //! Callback for "pcap_loop" with standard parameters. Called when ARP packet is received (detection of conflict is done here).
 /*!
@@ -41,9 +115,6 @@ void ipwd_analyse (u_char * args, const struct pcap_pkthdr *header, const u_char
 {
 	struct timeval current_time;
 	double difference = 0.0;
-	char * command = NULL;
-	int command_len = 0;
-	int rv = 0;
 	int i = 0;
 
 	/* Get addresses from packet */
@@ -301,26 +372,11 @@ void ipwd_analyse (u_char * args, const struct pcap_pkthdr *header, const u_char
 		if (config.script != NULL)
 		{
 			/* Run user-defined script in form: script "dev" "ip" "mac" */
-			command_len = strlen (config.script) + 2 + strlen (devices.dev[i].device) + 3 + strlen (devices.dev[i].ips[conflict_ip_index].ip) + 3 + strlen (rcv_smac) + 2;
-
-			if ((command = (char *) malloc (command_len * sizeof (char))) == NULL)
+			ipwd_message (IPWD_MSG_TYPE_DEBUG, "Running user-defined script: %s", config.script);
+			if (ipwd_run_user_script (config.script, devices.dev[i].device, devices.dev[i].ips[conflict_ip_index].ip, rcv_smac) == IPWD_RV_ERROR)
 			{
-				ipwd_message (IPWD_MSG_TYPE_ERROR, "Unable to execute user-defined script - malloc failed");
-				break;
- 			}
-
-			snprintf (command, command_len, "%s \"%s\" \"%s\" \"%s\"", config.script, devices.dev[i].device, devices.dev[i].ips[conflict_ip_index].ip, rcv_smac);
-
-			ipwd_message (IPWD_MSG_TYPE_DEBUG, "Running user-defined script: %s", command);
-
-			rv = system (command);
-			if (rv == -1)
-			{
-				ipwd_message (IPWD_MSG_TYPE_ERROR, "Unable to execute user-defined script: %s", command);
+				ipwd_message (IPWD_MSG_TYPE_ERROR, "Unable to execute user-defined script: %s", config.script);
 			}
-
-			free (command);
-			command = NULL;
 		}
 		else
 		{

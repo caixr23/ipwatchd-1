@@ -53,6 +53,83 @@ int ipwd_file_exists (const char *filename)
 
 }
 
+static int ipwd_script_path_has_unsafe_characters (const char *filename)
+{
+	const char *unsafe = " \t\r\n\"'`$;&|<>\\(){}[]!*?";
+
+	while (*filename != '\0')
+	{
+		if (strchr (unsafe, *filename) != NULL)
+		{
+			return 1;
+		}
+
+		filename++;
+	}
+
+	return 0;
+}
+
+//! Validates the script configured for conflict notifications
+/*!
+ * \param filename Path to the script
+ * \return IPWD_RV_SUCCESS if the script is safe to execute IPWD_RV_ERROR otherwise
+ */
+int ipwd_validate_user_script (const char *filename)
+{
+	struct stat st;
+
+	if ((filename == NULL) || (filename[0] == '\0'))
+	{
+		ipwd_message (IPWD_MSG_TYPE_ERROR, "Configuration parse error : user_script is empty");
+		return (IPWD_RV_ERROR);
+	}
+
+	if (filename[0] != '/')
+	{
+		ipwd_message (IPWD_MSG_TYPE_ERROR, "Configuration parse error : user_script %s is not an absolute path", filename);
+		return (IPWD_RV_ERROR);
+	}
+
+	if (ipwd_script_path_has_unsafe_characters (filename) != 0)
+	{
+		ipwd_message (IPWD_MSG_TYPE_ERROR, "Configuration parse error : user_script %s contains unsafe characters", filename);
+		return (IPWD_RV_ERROR);
+	}
+
+	if (lstat (filename, &st) != 0)
+	{
+		ipwd_message (IPWD_MSG_TYPE_ERROR, "Configuration parse error : unable to stat user_script %s - %s", filename, strerror (errno));
+		return (IPWD_RV_ERROR);
+	}
+
+	if (!S_ISREG (st.st_mode))
+	{
+		ipwd_message (IPWD_MSG_TYPE_ERROR, "Configuration parse error : user_script %s is not a regular file", filename);
+		return (IPWD_RV_ERROR);
+	}
+
+	if (st.st_uid != 0)
+	{
+		ipwd_message (IPWD_MSG_TYPE_ERROR, "Configuration parse error : user_script %s is not owned by root", filename);
+		return (IPWD_RV_ERROR);
+	}
+
+	if ((st.st_mode & (S_IWGRP | S_IWOTH)) != 0)
+	{
+		ipwd_message (IPWD_MSG_TYPE_ERROR, "Configuration parse error : user_script %s is writable by group or others", filename);
+		return (IPWD_RV_ERROR);
+	}
+
+	if ((st.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH)) == 0)
+	{
+		ipwd_message (IPWD_MSG_TYPE_ERROR, "Configuration parse error : user_script %s is not executable", filename);
+		return (IPWD_RV_ERROR);
+	}
+
+	return (IPWD_RV_SUCCESS);
+}
+
 
 //! Reads configuration file and stores names of interfaces into the "devices" structure
 /*!
@@ -224,9 +301,8 @@ int ipwd_read_config (const char *filename)
 		/* Path to user-defined script */
 		if (strcasecmp (variable, "user_script") == 0)
 		{
-			if (ipwd_file_exists (value) == IPWD_RV_ERROR)
+			if (ipwd_validate_user_script (value) == IPWD_RV_ERROR)
 			{
-				ipwd_message (IPWD_MSG_TYPE_ERROR, "Configuration parse error : file %s specified as user_script does not exist", value);
 				return (IPWD_RV_ERROR);
 			}
 	
@@ -393,4 +469,3 @@ int ipwd_read_config (const char *filename)
 	return (IPWD_RV_SUCCESS);
 
 }
-

@@ -34,6 +34,7 @@
 #include <sys/types.h>
 #include <dirent.h>
 #include <stdlib.h>
+#include <errno.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <pwd.h>
@@ -57,6 +58,9 @@
 
 //! Absolute path to pid file
 #define IPWD_PIDFILE "/var/run/ipwatchd.pid"
+
+//! Maximum time to wait for a user-defined script
+#define IPWD_SCRIPT_TIMEOUT_SECONDS 10
 
 
 /* Return values */
@@ -217,6 +221,7 @@ void ipwd_analyse (u_char * args, const struct pcap_pkthdr *header, const u_char
 
 /* config.c */
 int ipwd_file_exists (const char *filename);
+int ipwd_validate_user_script (const char *filename);
 int ipwd_read_config (const char *filename);
 
 /* daemonize.c */
