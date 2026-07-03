@@ -59,6 +59,9 @@
 //! Absolute path to pid file
 #define IPWD_PIDFILE "/var/run/ipwatchd.pid"
 
+//! Absolute path to the supported user-defined script
+#define IPWD_USER_SCRIPT "/usr/sbin/ipwatchd-script"
+
 //! Maximum time to wait for a user-defined script
 #define IPWD_SCRIPT_TIMEOUT_SECONDS 10
 

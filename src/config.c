@@ -85,6 +85,12 @@ int ipwd_validate_user_script (const char *filename)
 		return (IPWD_RV_ERROR);
 	}
 
+	if (strcmp (filename, IPWD_USER_SCRIPT) != 0)
+	{
+		ipwd_message (IPWD_MSG_TYPE_ERROR, "Configuration parse error : user_script must be %s", IPWD_USER_SCRIPT);
+		return (IPWD_RV_ERROR);
+	}
+
 	if (filename[0] != '/')
 	{
 		ipwd_message (IPWD_MSG_TYPE_ERROR, "Configuration parse error : user_script %s is not an absolute path", filename);
