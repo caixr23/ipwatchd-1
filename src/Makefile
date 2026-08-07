@@ -7,9 +7,9 @@ LIBS= -lpcap -lnet  $(shell pkg-config --libs dbus-1 polkit-gobject-1)
 override CFLAGS +=  $(shell pkg-config --cflags dbus-1 polkit-gobject-1)
 override CFLAGS += -fPIC -fstack-protector-all -z relro -z noexecstack -z now -pie
 
-all: analyse.o config.o daemonize.o devinfo.o genarp.o ipwatchd.o message.o signal.o dbus.o utils.o
+all: analyse.o config.o daemonize.o devinfo.o genarp.o ipwatchd.o message.o signal.o dbus.o securityloader.o utils.o
 	$(CC) $(CFLAGS) analyse.o config.o daemonize.o devinfo.o genarp.o \
-	ipwatchd.o message.o signal.o dbus.o utils.o -o ipwatchd $(LIBS)
+	ipwatchd.o message.o signal.o dbus.o securityloader.o utils.o -o ipwatchd $(LIBS)
 
 
 analyse.o: analyse.c ipwatchd.h
@@ -38,6 +38,9 @@ signal.o: signal.c ipwatchd.h
 
 dbus.o: dbus.c ipwatchd.h
 	$(CC) $(CFLAGS) -c dbus.c -o dbus.o
+
+securityloader.o: securityloader.c ipwatchd.h
+	$(CC) $(CFLAGS) -c securityloader.c -o securityloader.o
 
 utils.o: utils.c ipwatchd.h
 	$(CC) $(CFLAGS) -c utils.c -o utils.o

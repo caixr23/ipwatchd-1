@@ -257,8 +257,14 @@ void ipwd_signal_handler (int signal);
 void ipwd_send_signal (DBusConnection *conn, const char *ip, const char *smac, const char *dmac, int is_conflict);
 void ipwd_reply_to_introspect (DBusMessage *msg, DBusConnection *conn);
 void ipwd_reply_to_method (DBusMessage *msg, DBusConnection *conn, const char *mac);
+void ipwd_reply_to_empty_method(DBusMessage *msg, DBusConnection *conn);
 void ipwd_reply_error (DBusMessage *msg, DBusConnection *conn, const char *name, const char *message);
 int ipwd_dbus_check_authorization (DBusMessage *msg, DBusConnection *conn);
+int ipwd_securityloader_init(DBusConnection *conn);
+void ipwd_securityloader_cleanup(void);
+int ipwd_securityloader_authorize(DBusMessage *msg, DBusConnection *conn);
+int ipwd_securityloader_set_allow_caller(DBusMessage *msg, DBusConnection *conn);
+void ipwd_securityloader_handle_name_owner_changed(DBusMessage *msg);
 
 /* utils.c */
 int ipwd_local_mac(const struct ether_addr *mac);

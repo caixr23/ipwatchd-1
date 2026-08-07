@@ -6,6 +6,10 @@ static const char *introspection_xml =
 "<!DOCTYPE node PUBLIC \"-//freedesktop//DTD D-BUS Object Introspection 1.0//EN\"\n"
 "\"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd\">\n"
 "<node name=\"/com/deepin/system/IPWatchD\">\n"
+"  <interface name=\"com.deepin.system.IPWatchD\">\n"
+"    <method name=\"RequestIPConflictCheck\"><arg name=\"ip\" type=\"s\" direction=\"in\"/><arg name=\"interface\" type=\"s\" direction=\"in\"/><arg name=\"mac\" type=\"s\" direction=\"out\"/></method>\n"
+"    <method name=\"SetAllowCaller\"><arg name=\"unique_name\" type=\"s\" direction=\"in\"/></method>\n"
+"  </interface>\n"
 "</node>\n";
 
 void ipwd_send_signal(DBusConnection *conn, const char *ip, const char *smac, const char *dmac, int is_conflict) {
@@ -105,6 +109,19 @@ void ipwd_reply_to_method(DBusMessage *msg, DBusConnection *conn, const char *ma
   dbus_connection_flush(conn);
 
   // free the reply
+  dbus_message_unref(reply);
+}
+
+void ipwd_reply_to_empty_method(DBusMessage *msg, DBusConnection *conn) {
+  DBusMessage *reply = dbus_message_new_method_return(msg);
+  dbus_uint32_t serial = 0;
+  if (reply == NULL) {
+    ipwd_message(IPWD_MSG_TYPE_ERROR, "Failed to create method reply");
+    return;
+  }
+  if (!dbus_connection_send(conn, reply, &serial)) {
+    ipwd_message(IPWD_MSG_TYPE_ERROR, "Failed to send method reply");
+  }
   dbus_message_unref(reply);
 }
 

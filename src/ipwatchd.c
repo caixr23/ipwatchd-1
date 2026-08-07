@@ -269,6 +269,11 @@ int main (int argc, char *argv[])
    }
    check_context.conn = conn;
 
+   if (!ipwd_securityloader_init(conn)) {
+     ipwd_message(IPWD_MSG_TYPE_ERROR, "Unable to initialize security-loader authorization");
+     return (IPWD_RV_ERROR);
+   }
+
    // request our name on the bus and check for errors
    ret = dbus_bus_request_name(conn, IPWD_DBUS_SERVICE, DBUS_NAME_FLAG_REPLACE_EXISTING , &err);
    if (dbus_error_is_set(&err)) {
@@ -292,11 +297,22 @@ int main (int argc, char *argv[])
             dbus_message_unref(msg);
             continue;
         }
+       if (dbus_message_is_signal(msg, "org.freedesktop.DBus", "NameOwnerChanged")) {
+         ipwd_securityloader_handle_name_owner_changed(msg);
+         dbus_message_unref(msg);
+         continue;
+       }
+       if (dbus_message_is_method_call(msg, IPWD_DBUS_SERVICE, "SetAllowCaller") &&
+           dbus_message_has_path(msg, IPWD_DBUS_PATH)) {
+         ipwd_securityloader_set_allow_caller(msg, conn);
+         dbus_message_unref(msg);
+         continue;
+       }
        // check this is a method call for the right interface & method
        if (dbus_message_is_method_call(msg, IPWD_DBUS_SERVICE, "RequestIPConflictCheck") &&
          dbus_message_has_path(msg, IPWD_DBUS_PATH) &&
          check_context.stage == 0) {
-         if (!ipwd_dbus_check_authorization(msg, conn)) {
+         if (!ipwd_securityloader_authorize(msg, conn)) {
            dbus_message_unref(msg);
            continue;
          }
@@ -349,6 +365,7 @@ int main (int argc, char *argv[])
    }
 
 	pcap_close (h_pcap);
+	ipwd_securityloader_cleanup();
 
 	/* Stop IPwatchD */
 	ipwd_message (IPWD_MSG_TYPE_INFO, "IPwatchD stopped");
