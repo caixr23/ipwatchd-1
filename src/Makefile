@@ -3,12 +3,13 @@
 
 CC= gcc
 CFLAGS= -g -Wall -O2
-LIBS= -lpcap -lnet  $(shell pkg-config --libs dbus-1 polkit-gobject-1)
+LIBS= -lpcap -lnet  $(shell pkg-config --libs dbus-1 polkit-gobject-1 json-c)
 override CFLAGS +=  $(shell pkg-config --cflags dbus-1 polkit-gobject-1)
+override CFLAGS +=  $(shell pkg-config --cflags json-c)
 override CFLAGS += -fPIC -fstack-protector-all -z relro -z noexecstack -z now -pie
 
 all: analyse.o config.o daemonize.o devinfo.o genarp.o ipwatchd.o message.o signal.o dbus.o securityloader.o utils.o
-	$(CC) $(CFLAGS) analyse.o config.o daemonize.o devinfo.o genarp.o \
+	$(CC) $(CFLAGS) $(LDFLAGS) analyse.o config.o daemonize.o devinfo.o genarp.o \
 	ipwatchd.o message.o signal.o dbus.o securityloader.o utils.o -o ipwatchd $(LIBS)
 
 
@@ -45,11 +46,16 @@ securityloader.o: securityloader.c ipwatchd.h
 utils.o: utils.c ipwatchd.h
 	$(CC) $(CFLAGS) -c utils.c -o utils.o
 
+test: check
+
+check:
+	$(MAKE) -C ../tests check
+
 clean:
-	-rm *.o
+	-rm -f *.o ipwatchd
+	$(MAKE) -C ../tests clean
 
 distclean: clean
-	-rm ipwatchd
 
 
 install:
@@ -81,3 +87,5 @@ uninstall:
 	rm $(DESTDIR)/usr/share/man/man8/ipwatchd.8.gz
 	rm $(DESTDIR)/usr/share/man/man5/ipwatchd.conf.5.gz
 	rm $(DESTDIR)/usr/share/man/man1/ipwatchd-script.1.gz
+
+.PHONY: all check clean distclean install test uninstall

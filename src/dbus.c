@@ -9,6 +9,7 @@ static const char *introspection_xml =
 "  <interface name=\"com.deepin.system.IPWatchD\">\n"
 "    <method name=\"RequestIPConflictCheck\"><arg name=\"ip\" type=\"s\" direction=\"in\"/><arg name=\"interface\" type=\"s\" direction=\"in\"/><arg name=\"mac\" type=\"s\" direction=\"out\"/></method>\n"
 "    <method name=\"SetAllowCaller\"><arg name=\"unique_name\" type=\"s\" direction=\"in\"/></method>\n"
+"    <method name=\"GetAllowCallers\"><arg name=\"callers\" type=\"as\" direction=\"out\"/></method>\n"
 "  </interface>\n"
 "</node>\n";
 

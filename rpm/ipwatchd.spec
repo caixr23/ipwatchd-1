@@ -15,6 +15,7 @@ BuildRequires:     gcc, libpcap-devel, libnet-devel, systemd
 BuildRequires:     make
 BuildRequires:     pkgconfig(dbus-1)
 BuildRequires:     pkgconfig(polkit-gobject-1)
+BuildRequires:     pkgconfig(json-c)
 
 Requires(post):    systemd
 Requires(preun):   systemd

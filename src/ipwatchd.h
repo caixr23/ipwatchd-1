@@ -264,6 +264,7 @@ int ipwd_securityloader_init(DBusConnection *conn);
 void ipwd_securityloader_cleanup(void);
 int ipwd_securityloader_authorize(DBusMessage *msg, DBusConnection *conn);
 int ipwd_securityloader_set_allow_caller(DBusMessage *msg, DBusConnection *conn);
+int ipwd_securityloader_get_allow_callers(DBusMessage *msg, DBusConnection *conn);
 void ipwd_securityloader_handle_name_owner_changed(DBusMessage *msg);
 
 /* utils.c */

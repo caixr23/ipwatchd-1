@@ -302,12 +302,18 @@ int main (int argc, char *argv[])
          dbus_message_unref(msg);
          continue;
        }
-       if (dbus_message_is_method_call(msg, IPWD_DBUS_SERVICE, "SetAllowCaller") &&
-           dbus_message_has_path(msg, IPWD_DBUS_PATH)) {
-         ipwd_securityloader_set_allow_caller(msg, conn);
-         dbus_message_unref(msg);
-         continue;
-       }
+if (dbus_message_is_method_call(msg, IPWD_DBUS_SERVICE, "SetAllowCaller") &&
+            dbus_message_has_path(msg, IPWD_DBUS_PATH)) {
+          ipwd_securityloader_set_allow_caller(msg, conn);
+          dbus_message_unref(msg);
+          continue;
+        }
+        if (dbus_message_is_method_call(msg, IPWD_DBUS_SERVICE, "GetAllowCallers") &&
+            dbus_message_has_path(msg, IPWD_DBUS_PATH)) {
+          ipwd_securityloader_get_allow_callers(msg, conn);
+          dbus_message_unref(msg);
+          continue;
+        }
        // check this is a method call for the right interface & method
        if (dbus_message_is_method_call(msg, IPWD_DBUS_SERVICE, "RequestIPConflictCheck") &&
          dbus_message_has_path(msg, IPWD_DBUS_PATH) &&
