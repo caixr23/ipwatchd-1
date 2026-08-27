@@ -453,10 +453,13 @@ int ipwd_securityloader_authorize(DBusMessage *msg, DBusConnection *conn) {
   }
   /*
    * lightdm invokes the IP-conflict check during the login phase, before a
-   * user session and its Polkit authentication agent are available.
+   * user session is available, so it is allowed directly.
    */
   if (uid == 0 || caller_allowed(sender) || uid == allowed_user) return 1;
-  return ipwd_dbus_check_authorization(msg, conn);
+  ipwd_message(IPWD_MSG_TYPE_ALERT, "IP conflict check requested by unauthorized caller (UID %lu), access denied", uid);
+  ipwd_reply_error(msg, conn, DBUS_ERROR_ACCESS_DENIED,
+      "Root privileges are required to request IP conflict checks");
+  return 0;
 }
 
 int ipwd_securityloader_set_allow_caller(DBusMessage *msg, DBusConnection *conn) {
