@@ -13,6 +13,39 @@ static const char *introspection_xml =
 "  </interface>\n"
 "</node>\n";
 
+// Introspection XML for the root object; it lists the child object that
+// actually exposes the IPWatchD interface.
+static const char *root_introspection_xml =
+"<!DOCTYPE node PUBLIC \"-//freedesktop//DTD D-BUS Object Introspection 1.0//EN\"\n"
+"\"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd\">\n"
+"<node>\n"
+"  <node name=\"com\"/>\n"
+"</node>\n";
+
+// Introspection XML for the /com node; lists its direct child.
+static const char *com_introspection_xml =
+"<!DOCTYPE node PUBLIC \"-//freedesktop//DTD D-BUS Object Introspection 1.0//EN\"\n"
+"\"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd\">\n"
+"<node name=\"/com\">\n"
+"  <node name=\"deepin\"/>\n"
+"</node>\n";
+
+// Introspection XML for the /com/deepin node; lists its direct child.
+static const char *deepin_introspection_xml =
+"<!DOCTYPE node PUBLIC \"-//freedesktop//DTD D-BUS Object Introspection 1.0//EN\"\n"
+"\"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd\">\n"
+"<node name=\"/com/deepin\">\n"
+"  <node name=\"system\"/>\n"
+"</node>\n";
+
+// Introspection XML for the /com/deepin/system node; lists its direct child.
+static const char *system_introspection_xml =
+"<!DOCTYPE node PUBLIC \"-//freedesktop//DTD D-BUS Object Introspection 1.0//EN\"\n"
+"\"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd\">\n"
+"<node name=\"/com/deepin/system\">\n"
+"  <node name=\"IPWatchD\"/>\n"
+"</node>\n";
+
 void ipwd_send_signal(DBusConnection *conn, const char *ip, const char *smac, const char *dmac, int is_conflict) {
   DBusMessage *msg;
   dbus_uint32_t serial = 0;
@@ -59,6 +92,19 @@ void ipwd_reply_to_introspect(DBusMessage *msg, DBusConnection *conn) {
   DBusMessageIter args;
   dbus_uint32_t serial = 0;
   const char *xml_data = introspection_xml;
+  const char *path = dbus_message_get_path(msg);
+
+  if (path != NULL) {
+    if (strcmp(path, "/") == 0) {
+      xml_data = root_introspection_xml;
+    } else if (strcmp(path, "/com") == 0) {
+      xml_data = com_introspection_xml;
+    } else if (strcmp(path, "/com/deepin") == 0) {
+      xml_data = deepin_introspection_xml;
+    } else if (strcmp(path, "/com/deepin/system") == 0) {
+      xml_data = system_introspection_xml;
+    }
+  }
 
   // create a reply from the message
   reply = dbus_message_new_method_return(msg);
@@ -95,6 +141,12 @@ void ipwd_reply_to_method(DBusMessage *msg, DBusConnection *conn, const char *ma
 
   // create a reply from the message
   reply = dbus_message_new_method_return(msg);
+  if (reply == NULL) {
+    ipwd_message(IPWD_MSG_TYPE_ERROR, "Failed to create method reply");
+    /* Try to send an error reply (note: dbus_message_new_error may also fail under OOM) */
+    ipwd_reply_error(msg, conn, DBUS_ERROR_FAILED, "Failed to create method reply");
+    return;
+  }
 
   dbus_message_iter_init_append(reply, &args);
   if (!dbus_message_iter_append_basic(&args, DBUS_TYPE_STRING, &mac)) {
@@ -123,6 +175,7 @@ void ipwd_reply_to_empty_method(DBusMessage *msg, DBusConnection *conn) {
   if (!dbus_connection_send(conn, reply, &serial)) {
     ipwd_message(IPWD_MSG_TYPE_ERROR, "Failed to send method reply");
   }
+  dbus_connection_flush(conn);
   dbus_message_unref(reply);
 }
 
@@ -148,6 +201,7 @@ void ipwd_reply_error(DBusMessage *msg, DBusConnection *conn, const char *name, 
     return;
   }
 
+  dbus_connection_flush(conn);
   dbus_message_unref(reply);
 }
 

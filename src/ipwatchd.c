@@ -297,64 +297,104 @@ int main (int argc, char *argv[])
             dbus_message_unref(msg);
             continue;
         }
-       if (dbus_message_is_signal(msg, "org.freedesktop.DBus", "NameOwnerChanged")) {
-         ipwd_securityloader_handle_name_owner_changed(msg);
-         dbus_message_unref(msg);
-         continue;
-       }
-if (dbus_message_is_method_call(msg, IPWD_DBUS_SERVICE, "SetAllowCaller") &&
+        if (dbus_message_is_signal(msg, "org.freedesktop.DBus", "NameOwnerChanged")) {
+            ipwd_securityloader_handle_name_owner_changed(msg);
+            dbus_message_unref(msg);
+            continue;
+        }
+        if (dbus_message_is_method_call(msg, IPWD_DBUS_SERVICE, "SetAllowCaller") &&
             dbus_message_has_path(msg, IPWD_DBUS_PATH)) {
-          ipwd_securityloader_set_allow_caller(msg, conn);
-          dbus_message_unref(msg);
-          continue;
+            ipwd_securityloader_set_allow_caller(msg, conn);
+            dbus_message_unref(msg);
+            continue;
         }
         if (dbus_message_is_method_call(msg, IPWD_DBUS_SERVICE, "GetAllowCallers") &&
             dbus_message_has_path(msg, IPWD_DBUS_PATH)) {
-          ipwd_securityloader_get_allow_callers(msg, conn);
-          dbus_message_unref(msg);
-          continue;
+            ipwd_securityloader_get_allow_callers(msg, conn);
+            dbus_message_unref(msg);
+            continue;
         }
-       // check this is a method call for the right interface & method
-       if (dbus_message_is_method_call(msg, IPWD_DBUS_SERVICE, "RequestIPConflictCheck") &&
-         dbus_message_has_path(msg, IPWD_DBUS_PATH) &&
-         check_context.stage == 0) {
-         if (!ipwd_securityloader_authorize(msg, conn)) {
-           dbus_message_unref(msg);
-           continue;
-         }
+        // check this is a method call for the right interface & method
+        int is_ip_conflict_check = dbus_message_is_method_call(msg, IPWD_DBUS_SERVICE, "RequestIPConflictCheck") &&
+                                   dbus_message_has_path(msg, IPWD_DBUS_PATH);
+        if (is_ip_conflict_check && check_context.stage == 0) {
+            if (!ipwd_securityloader_authorize(msg, conn)) {
+              dbus_message_unref(msg);
+              continue;
+            }
 
-         // read the parameters
-         if (!dbus_message_iter_init(msg, &args)) {
-           ipwd_message(IPWD_MSG_TYPE_ERROR, "Message Has No Parameters\n");
-         } else if (DBUS_TYPE_STRING != dbus_message_iter_get_arg_type(&args)) {
-           ipwd_message(IPWD_MSG_TYPE_ERROR, "Argument is not string!");
-         } else {
-           check_context.stage++;
-           dbus_message_iter_get_basic(&args, &check_context.ip);
-         }
-         if (!dbus_message_iter_has_next(&args) || !dbus_message_iter_next(&args)) {
-           ipwd_message(IPWD_MSG_TYPE_ERROR, "Argument is not enough!");
-         } else if (DBUS_TYPE_STRING != dbus_message_iter_get_arg_type(&args)) {
-           ipwd_message(IPWD_MSG_TYPE_ERROR, "Argument is not string!");
-         } else {
-           check_context.stage++;
-           dbus_message_iter_get_basic(&args, &check_context.misc);
-           // get mac address by interface
-           char *tmp_mac = NULL;
-           if (ipwd_local_mac_by_interface(check_context.misc, &tmp_mac) == 0 && tmp_mac != NULL) {
-             size_t mac_size = strlen(tmp_mac);
-             memcpy(check_context.dev.mac, tmp_mac, mac_size);
-             check_context.dev.mac[mac_size] = '\0';
-           } else {
-             check_context.stage = -1;
-           }
-         }
+            // read the parameters
+            if (!dbus_message_iter_init(msg, &args)) {
+              ipwd_message(IPWD_MSG_TYPE_ERROR, "Message Has No Parameters\n");
+              ipwd_reply_error(msg, conn, DBUS_ERROR_INVALID_ARGS, "Message has no parameters");
+              check_context.stage = 0;
+              dbus_message_unref(msg);
+              check_context.ip = NULL;
+              check_context.misc = NULL;
+              continue;
+            }
+            if (DBUS_TYPE_STRING != dbus_message_iter_get_arg_type(&args)) {
+              ipwd_message(IPWD_MSG_TYPE_ERROR, "Argument is not string!");
+              ipwd_reply_error(msg, conn, DBUS_ERROR_INVALID_ARGS, "Argument is not a string");
+              check_context.stage = 0;
+              dbus_message_unref(msg);
+              check_context.ip = NULL;
+              check_context.misc = NULL;
+              continue;
+            }
+            check_context.stage++;
+            dbus_message_iter_get_basic(&args, &check_context.ip);
 
-         check_context.msg = msg;
-         ipwd_check_context_verify();
-       } else {
-         dbus_message_unref(msg);
-       }
+            if (!dbus_message_iter_has_next(&args) || !dbus_message_iter_next(&args)) {
+              ipwd_message(IPWD_MSG_TYPE_ERROR, "Argument is not enough!");
+              ipwd_reply_error(msg, conn, DBUS_ERROR_INVALID_ARGS, "Not enough arguments");
+              check_context.stage = 0;
+              dbus_message_unref(msg);
+              check_context.ip = NULL;
+              check_context.misc = NULL;
+              continue;
+            }
+            if (DBUS_TYPE_STRING != dbus_message_iter_get_arg_type(&args)) {
+              ipwd_message(IPWD_MSG_TYPE_ERROR, "Argument is not string!");
+              ipwd_reply_error(msg, conn, DBUS_ERROR_INVALID_ARGS, "Argument is not a string");
+              check_context.stage = 0;
+              dbus_message_unref(msg);
+              check_context.ip = NULL;
+              check_context.misc = NULL;
+              continue;
+            }
+            check_context.stage++;
+            dbus_message_iter_get_basic(&args, &check_context.misc);
+
+            // get mac address by interface; empty interface -> auto-select device in verify()
+            memset(check_context.dev.mac, '\0', IPWD_MAX_DEVICE_ADDRESS_LEN);
+            if (check_context.misc[0] != '\0') {
+              char *tmp_mac = NULL;
+              if (ipwd_local_mac_by_interface(check_context.misc, &tmp_mac) == 0 && tmp_mac != NULL) {
+                strncpy(check_context.dev.mac, tmp_mac, IPWD_MAX_DEVICE_ADDRESS_LEN - 1);
+              } else {
+                ipwd_message(IPWD_MSG_TYPE_ERROR, "Unable to get MAC address for interface %s", check_context.misc);
+                ipwd_reply_error(msg, conn, DBUS_ERROR_INVALID_ARGS, "Unable to get MAC address for interface");
+                check_context.stage = 0;
+                dbus_message_unref(msg);
+                check_context.ip = NULL;
+                check_context.misc = NULL;
+                continue;
+              }
+            }
+
+            check_context.msg = msg;
+            ipwd_check_context_verify();
+        } else if (is_ip_conflict_check) {
+            // a conflict check is already in progress
+            ipwd_reply_error(msg, conn, DBUS_ERROR_FAILED, "An IP conflict check is already in progress");
+            dbus_message_unref(msg);
+        } else if (dbus_message_get_type(msg) == DBUS_MESSAGE_TYPE_METHOD_CALL) {
+            ipwd_reply_error(msg, conn, DBUS_ERROR_UNKNOWN_METHOD, "Unknown method");
+            dbus_message_unref(msg);
+        } else {
+            dbus_message_unref(msg);
+        }
      }
 
      static time_t last_update_time = 0;
@@ -427,20 +467,35 @@ void ipwd_print_help (void)
 void ipwd_check_context_verify (void)
 {
   if (check_context.ip == NULL || check_context.misc == NULL) {
-    ipwd_message (IPWD_MSG_TYPE_ERROR, "Unable to convert source IP address %s", check_context.ip);
-    check_context.stage = -1;
+    ipwd_message (IPWD_MSG_TYPE_ERROR, "Invalid parameters for IP conflict check");
+    ipwd_reply_error(check_context.msg, check_context.conn, DBUS_ERROR_INVALID_ARGS, "Invalid parameters");
+    dbus_message_unref(check_context.msg);
+    check_context.msg = NULL;
+    check_context.ip = NULL;
+    check_context.misc = NULL;
+    check_context.stage = 0;
     return;
   }
 
   struct in_addr sip, dip;
   if (inet_aton(check_context.ip, &sip) == 0) {
     ipwd_message (IPWD_MSG_TYPE_ERROR, "Unable to convert source IP address %s", check_context.ip);
-    check_context.stage = -1;
+    ipwd_reply_error(check_context.msg, check_context.conn, DBUS_ERROR_INVALID_ARGS, "Invalid source IP address");
+    dbus_message_unref(check_context.msg);
+    check_context.msg = NULL;
+    check_context.ip = NULL;
+    check_context.misc = NULL;
+    check_context.stage = 0;
     return;
   }
   if (sip.s_addr == 0) {
     ipwd_message (IPWD_MSG_TYPE_ERROR, "Error source IP address %s", check_context.ip);
-    check_context.stage = -1;
+    ipwd_reply_error(check_context.msg, check_context.conn, DBUS_ERROR_INVALID_ARGS, "Invalid source IP address");
+    dbus_message_unref(check_context.msg);
+    check_context.msg = NULL;
+    check_context.ip = NULL;
+    check_context.misc = NULL;
+    check_context.stage = 0;
     return;
   }
 
@@ -448,6 +503,11 @@ void ipwd_check_context_verify (void)
   char tmp_mac[IPWD_MAX_DEVICE_ADDRESS_LEN] = {0};
   size_t mac_size = strlen(check_context.dev.mac);
   memcpy(tmp_mac, check_context.dev.mac, mac_size);
+  if (check_context.dev.ips != NULL) {
+    free (check_context.dev.ips);
+    check_context.dev.ips = NULL;
+    check_context.dev.ipnum = 0;
+  }
   memset(&check_context.dev, 0, sizeof(IPWD_S_DEV));
   check_context.dev.state = IPWD_DEVICE_STATE_UNUSABLE;
 
@@ -455,7 +515,7 @@ void ipwd_check_context_verify (void)
     IPWD_S_DEV dev;
     for (i = 0; i < devices.devnum; i++) {
       memset(dev.device, 0, sizeof(dev.device));
-      strcpy(dev.device, devices.dev[i].device);
+      strncpy(dev.device, devices.dev[i].device, IPWD_MAX_DEVICE_NAME_LEN - 1);
       
       // 使用新的函数获取所有IP地址
       if (ipwd_devinfo_all_ips(dev.device, dev.mac, &dev.ips, &dev.ipnum) == IPWD_RV_ERROR) {
@@ -496,8 +556,12 @@ void ipwd_check_context_verify (void)
 
   if (check_context.dev.state == IPWD_DEVICE_STATE_UNUSABLE) {
     ipwd_message(IPWD_MSG_TYPE_ALERT, "can't find dev: %s - %s", check_context.ip, check_context.misc);
-    check_context.stage = -1;
     ipwd_reply_to_method(check_context.msg, check_context.conn, "");
+    dbus_message_unref(check_context.msg);
+    check_context.msg = NULL;
+    check_context.ip = NULL;
+    check_context.misc = NULL;
+    check_context.stage = 0;
   } else {
     ipwd_message(IPWD_MSG_TYPE_DEBUG, "check ip %s use dev: %s", check_context.ip, check_context.dev.device);
   }
@@ -522,9 +586,19 @@ void ipwd_check_context_update (void)
       case 8:
         // reply ok
         ipwd_reply_to_method(check_context.msg, check_context.conn, "");
+        /* fall through */
       default:
         check_context.stage = 0;
-        if (check_context.msg != NULL)
+        if (check_context.msg != NULL) {
           dbus_message_unref(check_context.msg);
+          check_context.msg = NULL;
+        }
+        check_context.ip = NULL;
+        check_context.misc = NULL;
+        if (check_context.dev.ips != NULL) {
+          free(check_context.dev.ips);
+          check_context.dev.ips = NULL;
+          check_context.dev.ipnum = 0;
+        }
       }
 }

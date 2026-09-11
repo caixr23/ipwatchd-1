@@ -467,8 +467,11 @@ int ipwd_read_config (const char *filename)
 		}
 		else
 		{
-			ipwd_message (IPWD_MSG_TYPE_ERROR, "No interfaces discovered");
-			return (IPWD_RV_ERROR);
+			/* Automatic mode: keep the daemon running even when no interface
+			 * has an IPv4 address yet. Interfaces that appear later (e.g. once
+			 * DHCP has configured the NIC) are picked up periodically by
+			 * ipwd_update_devices(). */
+			ipwd_message (IPWD_MSG_TYPE_INFO, "No interfaces discovered - will retry automatically");
 		}
 	}
 

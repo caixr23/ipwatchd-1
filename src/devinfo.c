@@ -132,6 +132,7 @@ int ipwd_devinfo_all_ips (const char *p_dev, char *p_mac, IPWD_S_IP **ips, int *
 	{
 		ipwd_message (IPWD_MSG_TYPE_ERROR, "getifaddrs error");
 		free(*ips);
+		*ips = NULL;
 		return (IPWD_RV_ERROR);
 	}
 
@@ -165,6 +166,7 @@ int ipwd_devinfo_all_ips (const char *p_dev, char *p_mac, IPWD_S_IP **ips, int *
 							ipwd_message (IPWD_MSG_TYPE_ERROR, "realloc failed for IP addresses array");
 							freeifaddrs(ifa);
 							free(*ips);
+							*ips = NULL;
 							return (IPWD_RV_ERROR);
 						}
 						*ips = temp;
@@ -312,46 +314,66 @@ int ipwd_update_devices (void)
 			devices.dev[devices.devnum].mode = IPWD_PROTECTION_MODE_ACTIVE;
 			devices.dev[devices.devnum].ips = NULL;
 			devices.dev[devices.devnum].ipnum = 0;
+			j = devices.devnum;
+			devices.devnum = devices.devnum + 1;
+		}
 
-			/* Initialize device state - try to get current IP and MAC info */
-			char ip[IPWD_MAX_DEVICE_ADDRESS_LEN];
-			char mac[IPWD_MAX_DEVICE_ADDRESS_LEN];
-			if (ipwd_devinfo (iface->ifr_name, ip, mac) == IPWD_RV_SUCCESS)
+		/* Refresh device network info. This runs for both newly added
+		 * interfaces and existing ones, so a device that first appeared
+		 * without an IPv4 address becomes USABLE once DHCP assigns one. */
+		IPWD_S_DEV *dev = &devices.dev[j];
+
+		/* Free the previously fetched IP list before refreshing it */
+		if (dev->ips != NULL)
+		{
+			free (dev->ips);
+			dev->ips = NULL;
+		}
+		dev->ipnum = 0;
+
+		/* Try to get current IP and MAC info */
+		char ip[IPWD_MAX_DEVICE_ADDRESS_LEN];
+		char mac[IPWD_MAX_DEVICE_ADDRESS_LEN];
+		if (ipwd_devinfo (iface->ifr_name, ip, mac) == IPWD_RV_SUCCESS)
+		{
+			dev->state = IPWD_DEVICE_STATE_USABLE;
+			memset (dev->mac, '\0', IPWD_MAX_DEVICE_ADDRESS_LEN);
+			strncpy (dev->mac, mac, IPWD_MAX_DEVICE_ADDRESS_LEN - 1);
+
+			/* Get all IP addresses for this interface */
+			if (ipwd_devinfo_all_ips (iface->ifr_name, dev->mac, &dev->ips, &dev->ipnum) == IPWD_RV_SUCCESS)
 			{
-				devices.dev[devices.devnum].state = IPWD_DEVICE_STATE_USABLE;
-				strncpy (devices.dev[devices.devnum].mac, mac, IPWD_MAX_DEVICE_ADDRESS_LEN - 1);
-				
-				/* Get all IP addresses for this interface */
-				if (ipwd_devinfo_all_ips (iface->ifr_name, devices.dev[devices.devnum].mac, &devices.dev[devices.devnum].ips, &devices.dev[devices.devnum].ipnum) == IPWD_RV_SUCCESS)
-				{
-					ipwd_message (IPWD_MSG_TYPE_DEBUG, "Added device %s with %d IP addresses and MAC %s (USABLE)",
-						devices.dev[devices.devnum].device, devices.dev[devices.devnum].ipnum, mac);
-				}
-				else
-				{
-					/* Fallback: store at least the first IP address */
-					devices.dev[devices.devnum].ips = (IPWD_S_IP *)malloc(sizeof(IPWD_S_IP));
-					if (devices.dev[devices.devnum].ips != NULL)
-					{
-						memset (devices.dev[devices.devnum].ips[0].ip, '\0', IPWD_MAX_DEVICE_ADDRESS_LEN);
-						strncpy (devices.dev[devices.devnum].ips[0].ip, ip, IPWD_MAX_DEVICE_ADDRESS_LEN - 1);
-						devices.dev[devices.devnum].ips[0].time.tv_sec = 0;
-						devices.dev[devices.devnum].ips[0].time.tv_usec = 0;
-						devices.dev[devices.devnum].ipnum = 1;
-						ipwd_message (IPWD_MSG_TYPE_DEBUG, "Added device %s with IP %s and MAC %s (USABLE)",
-							devices.dev[devices.devnum].device, ip, mac);
-					}
-				}
+				ipwd_message (IPWD_MSG_TYPE_DEBUG, "Device %s has %d IP addresses and MAC %s (USABLE)",
+					dev->device, dev->ipnum, mac);
 			}
 			else
 			{
-				devices.dev[devices.devnum].state = IPWD_DEVICE_STATE_UNUSABLE;
-				memset (devices.dev[devices.devnum].mac, '\0', IPWD_MAX_DEVICE_ADDRESS_LEN);
-				ipwd_message (IPWD_MSG_TYPE_DEBUG, "Added device %s (UNUSABLE - no IP address)",
-					devices.dev[devices.devnum].device);
+				/* Fallback: store at least the first IP address */
+				dev->ips = (IPWD_S_IP *)malloc(sizeof(IPWD_S_IP));
+				if (dev->ips != NULL)
+				{
+					memset (dev->ips[0].ip, '\0', IPWD_MAX_DEVICE_ADDRESS_LEN);
+					strncpy (dev->ips[0].ip, ip, IPWD_MAX_DEVICE_ADDRESS_LEN - 1);
+					dev->ips[0].time.tv_sec = 0;
+					dev->ips[0].time.tv_usec = 0;
+					dev->ipnum = 1;
+					ipwd_message (IPWD_MSG_TYPE_DEBUG, "Device %s has IP %s and MAC %s (USABLE)",
+						dev->device, ip, mac);
+				}
+				else
+				{
+					dev->state = IPWD_DEVICE_STATE_UNUSABLE;
+					ipwd_message (IPWD_MSG_TYPE_ERROR, "malloc failed for fallback IP entry on device %s",
+						dev->device);
+				}
 			}
-
-			devices.devnum = devices.devnum + 1;
+		}
+		else
+		{
+			dev->state = IPWD_DEVICE_STATE_UNUSABLE;
+			memset (dev->mac, '\0', IPWD_MAX_DEVICE_ADDRESS_LEN);
+			ipwd_message (IPWD_MSG_TYPE_DEBUG, "Device %s (UNUSABLE - no IP address)",
+				dev->device);
 		}
 	}
 
