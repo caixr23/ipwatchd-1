@@ -1,7 +1,7 @@
 Source: ipwatchd
 Section: net
 Priority: optional
-Maintainer: Jaroslav Imrich <jariq@jariq.sk>
+Maintainer: Deepin Developer <deepin-dev@deepin.org>
 Build-Depends: debhelper (>= 7), libpcap-dev, libnet1-dev, libdbus-1-dev, libpolkit-gobject-1-dev, libjson-c-dev
 Standards-Version: 3.9.2
 Homepage: http://ipwatchd.sf.net
