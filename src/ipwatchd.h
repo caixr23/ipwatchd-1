@@ -1,5 +1,5 @@
 /* IPwatchD - IP conflict detection tool for Linux
- * Copyright (C) 2007-2010 Jaroslav Imrich <jariq(at)jariq(dot)sk>
+ * Copyright (C) 2007-2018 Jaroslav Imrich <jariq(at)jariq(dot)sk>
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -54,7 +54,7 @@
 
 
 //! String with IPwatchD version information
-#define IPWATCHD_VERSION "IPwatchD 1.2.1"
+#define IPWATCHD_VERSION "IPwatchD 1.3.0"
 
 //! Absolute path to pid file
 #define IPWD_PIDFILE "/var/run/ipwatchd.pid"
@@ -217,7 +217,7 @@ IPWD_S_CHECK_CONTEXT;
 
 /* IPwatchD internal functions - described in corresponding source files */
 
-// \cond - Doxygen ignore block start
+// \cond Doxygen ignore block start
 
 /* analyse.c */
 void ipwd_analyse (u_char * args, const struct pcap_pkthdr *header, const u_char * packet);

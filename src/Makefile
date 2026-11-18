@@ -1,5 +1,5 @@
 # IPwatchD - IP conflict detection tool for Linux
-# Copyright (C) 2007-2010 Jaroslav Imrich <jariq(at)jariq(dot)sk>
+# Copyright (C) 2007-2018 Jaroslav Imrich <jariq(at)jariq(dot)sk>
 
 CC= gcc
 CFLAGS= -g -Wall -O2
@@ -59,7 +59,8 @@ distclean: clean
 
 
 install:
-	mkdir -p $(DESTDIR)/etc/init.d
+	mkdir -p $(DESTDIR)/etc
+	mkdir -p $(DESTDIR)/lib/systemd/system
 	mkdir -p $(DESTDIR)/usr/sbin
 	mkdir -p $(DESTDIR)/usr/share/man/man8
 	mkdir -p $(DESTDIR)/usr/share/man/man5
@@ -67,8 +68,8 @@ install:
 	mkdir -p ${DESTDIR}/usr/share/dbus-1/system.d
 	mkdir -p ${DESTDIR}/usr/share/polkit-1/actions
 	cp ipwatchd $(DESTDIR)/usr/sbin
-	cp scripts/ipwatchd-script $(DESTDIR)/usr/sbin
-	cp scripts/ipwatchd $(DESTDIR)/etc/init.d
+	cp ipwatchd-script $(DESTDIR)/usr/sbin
+	cp ipwatchd.service $(DESTDIR)/lib/systemd/system
 	cp ipwatchd.conf $(DESTDIR)/etc
 	cp misc/conf/*.conf ${DESTDIR}/usr/share/dbus-1/system.d/
 	cp -r misc/system-services ${DESTDIR}/usr/share/dbus-1/
@@ -82,7 +83,7 @@ install:
 uninstall:
 	rm $(DESTDIR)/usr/sbin/ipwatchd
 	rm $(DESTDIR)/usr/sbin/ipwatchd-script
-	rm $(DESTDIR)/etc/init.d/ipwatchd
+	rm $(DESTDIR)/lib/systemd/system/ipwatchd.service
 	rm $(DESTDIR)/etc/ipwatchd.conf
 	rm $(DESTDIR)/usr/share/man/man8/ipwatchd.8.gz
 	rm $(DESTDIR)/usr/share/man/man5/ipwatchd.conf.5.gz
